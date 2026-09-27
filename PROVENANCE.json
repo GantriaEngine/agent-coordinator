@@ -1,0 +1,48 @@
+{
+  "Repository": "https://github.com/gmoddev/gargantuan",
+  "WorkingTreeBase": "b471b78e78376fb90a50771c1b99e3f8bfe82a4e",
+  "SourceDirectory": "tools/physical-qualifier",
+  "SourceWasUntracked": true,
+  "Files": [
+    {
+      "Path": "docs/PROTOCOL.md",
+      "SHA256": "564781be031571b2f06e7bac99759b54c287d98aef459d0bf4b0346b29ad4735"
+    },
+    {
+      "Path": "package.py",
+      "SHA256": "959fbb70a9874d53e6b603ccc76f3a77e04ed5a8e6908ce2b6ab4da2ff6b9a0a"
+    },
+    {
+      "Path": "privileged-helper/Install-CaptureService.ps1",
+      "SHA256": "ed15ccea13dac783fc64fed00ddea0081214dc06fa91d81ec6ecff96724d4424"
+    },
+    {
+      "Path": "privileged-helper/PhysicalQualifier.CaptureService.csproj",
+      "SHA256": "3794a67f9fa6f3d75c21183fa247bba38797a6ae7e1594e9e69014c9f635447c"
+    },
+    {
+      "Path": "privileged-helper/Program.cs",
+      "SHA256": "edcef703080ddc4233b17aa1be9f6139cd1130ce44e3187f31e64244ac2eeffe"
+    },
+    {
+      "Path": "privileged-helper/README.md",
+      "SHA256": "e96e0e1d0ea08cd2682715fbbc11c9a65e249a11283006cabde18f6c097a385e"
+    },
+    {
+      "Path": "qualifier.py",
+      "SHA256": "8ce9c95de83c196968fc60ec8950571562900c42d5f3d81a15aee5231e657f1e"
+    },
+    {
+      "Path": "tests/test_qualifier.py",
+      "SHA256": "0ee7074e854ca89fbe96131e49bfd87e9acd8336ca9fd1bd632819102fa03004"
+    },
+    {
+      "Path": "tests/TestCaptureHooks.ps1",
+      "SHA256": "caf40e088085ba599ffe455ef87b2a87d38390ed348f03e688c123b8f3992937"
+    },
+    {
+      "Path": "worker/PktMonCapture.ps1",
+      "SHA256": "86c04c42580fe0b5fab38dba5536986481e34e933ddfaef23f69bc082bdceab0"
+    }
+  ]
+}
