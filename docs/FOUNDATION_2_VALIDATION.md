@@ -51,6 +51,13 @@ the host listener before the client could pull. The client connection-refused
 error is secondary. A bounded retry for this Windows reader/replacement race is
 under test; this failed run is not a qualification pass or a physical precursor.
 
+The next staging step exposed an installer-owned config ACL edge: removing all
+inherited ACEs before granting the medium-integrity endpoint user's ACE could
+leave an empty DACL. The file ACL operation now copies inherited ACEs from the
+already private parent before replacing grants. Staging must still ensure the
+parent private directory was provisioned by the endpoint owner. This is a
+hardening correction, not an accepted workflow result.
+
 Starting canonical main: `35d6ce97e9cb255e8ccfb27b3a6d3f97543a5c45`.
 Initial implementation: `f026acbe8b5828a21e792a3b0c5b4acb1a9b8b8b`.
 The follow-up source `03676fe32378d4150edb9e62c5691699a8b780ee` adds typed

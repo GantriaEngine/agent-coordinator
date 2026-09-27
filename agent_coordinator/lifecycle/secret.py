@@ -74,7 +74,12 @@ def Restrict(File, Directory=False):
     Sid = next(csv.reader([subprocess.check_output(
         ["whoami", "/user", "/fo", "csv", "/nh"], text=True).strip()]))[1]
     PathValue = str(File)
-    subprocess.run(["icacls", PathValue, "/inheritance:r"],
+    # Files may have been copied by an elevated installer and be owned by
+    # Administrators. Copy their inherited owner ACE before changing grants;
+    # removing inheritance first could leave a medium-integrity daemon with
+    # an empty DACL and no way to finish setup.
+    Inheritance = "/inheritance:r" if Directory else "/inheritance:d"
+    subprocess.run(["icacls", PathValue, Inheritance],
                    check=True, capture_output=True)
     Suffix = ":(OI)(CI)F" if Directory else ":F"
     subprocess.run(["icacls", PathValue, "/grant:r", "*" + Sid + Suffix,

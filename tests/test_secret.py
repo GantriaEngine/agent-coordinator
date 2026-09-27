@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 import secrets
 import unittest
+from unittest.mock import patch
 
-from agent_coordinator.lifecycle.secret import Dpapi, LoadKey, RevokeKey, StoreKey
+from agent_coordinator.lifecycle.secret import Dpapi, LoadKey, Restrict, RevokeKey, StoreKey
 
 
 class SecretTests(unittest.TestCase):
@@ -36,3 +37,13 @@ class SecretTests(unittest.TestCase):
     def test_key_path_cannot_use_shared_checkout(self):
         with self.assertRaises(ValueError):
             StoreKey(Path(__file__).parent / "shared.dpapi", secrets.token_hex(32))
+
+    def test_installer_owned_file_copies_inherited_ace_before_grant(self):
+        File = Path("config.json")
+        with patch("agent_coordinator.lifecycle.secret.os.name", "nt"), \
+                patch("agent_coordinator.lifecycle.secret.subprocess.check_output",
+                      return_value='"HOSTPC\\host","S-1-5-21-1-1001"\n'), \
+                patch("agent_coordinator.lifecycle.secret.subprocess.run") as Run:
+            Restrict(File)
+        self.assertIn("/inheritance:d", Run.call_args_list[0].args[0])
+        self.assertIn("/grant:r", Run.call_args_list[1].args[0])
