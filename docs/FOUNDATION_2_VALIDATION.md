@@ -1,11 +1,13 @@
 # Foundation 2 validation and readiness
 
-Verdict: **READY FOR EXPERIMENTAL USE** on logged-in, locally approved Windows
-endpoints. The feature remains `0.2.0.dev0` on `codex/foundation-2-lifecycle`;
+Original Foundation 2 verdict: **READY FOR EXPERIMENTAL USE** on logged-in,
+locally approved Windows endpoints. Foundation 2B verdict below: **PASS for the
+same supported interactive-user deployment model**. The feature remains
+`0.2.0.dev0` on `codex/foundation-2-lifecycle`;
 no release or tag is published. v0.1.0, canonical
 main and consumer deployment pins remain unchanged.
 
-## Foundation 2B hardening (qualification in progress)
+## Foundation 2B hardening
 
 The production-hardening branch replaces persistent plaintext daemon/setup keys
 with endpoint-user DPAPI files under private `.codex/agent-coordinator` ACLs.
@@ -21,7 +23,7 @@ the Job and streams. An interrupted daemon's `current.json` is recorded as
 FAILED in `recovery.json` on restart; `used.json` still rejects that generation.
 There is no automatic workflow replay.
 
-On the main Windows endpoint, the 70-test suite, synthetic simulation, static
+On the main Windows endpoint, the initial 70-test suite, synthetic simulation, static
 checks, wheel build and Windows helper suite passed. An immediate-descendant
 fixture confirmed Job cleanup after abrupt supervisor exit for pre-registration,
 running and post-workflow phase labels. These phase labels exercise process
@@ -38,10 +40,8 @@ Task Scheduler probe did not start, and a credentialed process launch failed
 with DLL initialization error; the successful direct impersonation with a
 loaded user profile is the recorded isolation result.
 
-This is **not yet a Foundation 2B readiness verdict**. Fresh hardened two-PC
-workflow, final package/CI evidence and the required supervisor-death physical
-probe are pending. No Gargantuan qualification may consume this revision until
-those gates pass.
+At that point in the hardening sequence, a fresh workflow and physical
+supervisor-death check were still pending; the result is recorded below.
 
 The first protected-key two-PC workflow `01c7fbe3-970e-4c73-9c34-c655f4083814`
 failed before barrier. The worker pulled and registered, then its local status
@@ -57,6 +57,54 @@ leave an empty DACL. The file ACL operation now copies inherited ACEs from the
 already private parent before replacing grants. Staging must still ensure the
 parent private directory was provisioned by the endpoint owner. This is a
 hardening correction, not an accepted workflow result.
+
+## Foundation 2B result (2026-09-27)
+
+**PASS for locally approved, logged-in Windows endpoints.** Runtime source
+`cb32bce284f220cc561172babdd4ceb2bc9cef25` passed the fresh two-PC
+synthetic workflow `1f808658-25a8-428e-bc56-d335fc792327`. Main CLIENT used
+Codex `0.155.0-alpha.16`, thread `01a0e531-c4e8-78e1-ad18-01564c13c194`;
+dockerbox SERVER used `0.158.0-alpha.2`, thread
+`01a0e531-c315-7022-b500-cb2eccfb4c1e` in the existing limited interactive
+medium-integrity task context. Both used their own local Codex authentication.
+
+The host journal has two each of PULL_ASSIGNMENT, ASSIGNMENT, REGISTER,
+REGISTERED, STAGED, ARMED, START, COMPLETE and CLEANED, plus SERVER LIVE and
+CLIENT RESULT. Both typed results and the host result succeeded. Both local
+presences reached IDLE. There was no human message relay after start. The host
+evidence manifest SHA-256 is
+`8344b81dab2371c5601df97d3ab3977910236c93b7eb28bc12e953b081848cd8`.
+Both transient current tickets/status files were removed; no lifecycle Codex
+child remained. Test daemons, limited task and SSH forward were stopped, and
+independent DPAPI test keys/config files were retired. `used.json` remains as
+the durable replay ledger. No probe or capture ran in this workflow.
+
+On **both actual Windows PCs**, the bounded crash fixture started an immediate
+descendant inside the Job, then exited its endpoint supervisor at three distinct
+states: before registration, RUNNING, and after an IDLE workflow-status write.
+In every case, the clock stopped, replacement reported FAILED and
+`SUPERVISOR_LOST`, the generation remained consumed, and no automatic replay
+occurred. These are harmless local process/state fixtures, not three further
+Codex/physical network workflows. The short presence lease and notice expiry
+remain authoritative after supervisor loss.
+
+Local validation at the final hardening source: 72 Python tests, synthetic
+simulation, documentation/JSON/whitespace checks, Windows fixed-operation and
+90-second helper security suite, wheel build, and `git diff --check` passed.
+The wheel SHA-256 is
+`2A74C9262A3E0BE04648EB256D26AF59E040021F4D311AFCD152ED437A6D2D4D`.
+Source SHA-256: `windows_process.py`
+`4B0D1A26A9E29CD36240F74AE2EA5A793419B1C0C530682B60793BAF815B0E34`,
+`secret.py` `0468EF1F480A0064EA070DB100A60BA5A7FF026DCE16522610F0B599BDF491AE`,
+`endpoint.py` `C236340E30D16F94737EC5606FE5B9143EA4DF97D37D376F4E70C8B81327C88B`.
+Hosted Windows/Linux checks at `cb32bce` passed; the test/documentation-only
+follow-up requires its own final PR checks.
+
+This qualifies the bounded lifecycle plane on the two logged-in Windows users,
+not a general unattended service. The interactive-user prerequisite, unchanged
+v1 control transport/SSH boundary, endpoint-local authorization and no network
+Resume remain explicit. v0.1.0/main, installed Gargantuan tools and consumer
+pin remain unchanged until a separate exact-revision consumer qualification.
 
 Starting canonical main: `35d6ce97e9cb255e8ccfb27b3a6d3f97543a5c45`.
 Initial implementation: `f026acbe8b5828a21e792a3b0c5b4acb1a9b8b8b`.
