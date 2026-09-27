@@ -39,6 +39,25 @@ class Endpoint:
         self.Registered = False
         self.BridgeSequence = 0
         self.BridgeState = None
+        Current = self.Directory / "current.json"
+        if Current.exists():
+            if Current.stat().st_size > 8192:
+                raise ValueError("unbounded recovered ticket")
+            Prior = json.loads(Current.read_text())
+            Notice = Prior["Notice"]
+            from .presence import Uuid
+            Uuid(Notice["RunId"])
+            Uuid(Notice["Generation"])
+            if Notice["EndpointId"] != EndpointId or Notice["Generation"] not in self.Used:
+                raise ValueError("unconsumed or foreign recovered ticket")
+            Atomic(self.Directory / "recovery.json", {"RunId": Notice["RunId"],
+                   "Generation": Notice["Generation"], "Status": "FAILED",
+                   "Reason": "SUPERVISOR_LOST"})
+            Current.unlink()
+            (self.Directory / "status.json").unlink(missing_ok=True)
+            self.Presence.Begin(Notice["RunId"], Notice["Generation"])
+            self.Presence.Update(Notice["Generation"], Notice["RunId"], 2,
+                                 "FAILED", "AGENT_FAILED")
 
     def InstallTicket(self, Ticket):
         """Endpoint-local provisioning only; there is deliberately no wire counterpart."""
@@ -87,6 +106,7 @@ class Endpoint:
             self.Used.append(Generation)
             Atomic(self.LedgerFile, self.Used)  # consume before spawn, including spawn failures
             Atomic(self.Directory / "current.json", Ticket)
+            (self.Directory / "recovery.json").unlink(missing_ok=True)
             (self.Directory / "status.json").unlink(missing_ok=True)
             self.Active = Generation
             self.Registered = False

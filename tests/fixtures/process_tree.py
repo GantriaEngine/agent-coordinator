@@ -5,7 +5,8 @@ import sys
 import time
 
 if sys.argv[1] == "parent":
-    sys.stdin.readline()  # permits job assignment before child creation
+    if "immediate" not in sys.argv[3:]:
+        sys.stdin.readline()
     Child = subprocess.Popen([sys.executable, __file__, "child", sys.argv[2]])
     print(Child.pid, flush=True)
     if len(sys.argv) > 3:

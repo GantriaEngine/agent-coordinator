@@ -1,7 +1,7 @@
 """Bounded synthetic harness after endpoint-local installation and SSH forwarding.
 
-Local setup JSON is protected/ignored; it contains only independent lifecycle keys,
-not OpenAI credentials. This harness never launches shell commands on a peer.
+Local setup JSON contains protected key-file paths, never persistent plaintext
+keys or OpenAI credentials. This harness never launches shell commands on a peer.
 """
 import argparse
 import json
@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent_coordinator.control import Assignments, Host
 from agent_coordinator.lifecycle.policy import Bootstrap
 from agent_coordinator.lifecycle.service import Client
+from agent_coordinator.lifecycle.secret import LoadKey
 from agent_coordinator.transport import Journal
 from agent_coordinator.workflow import Exact, Workflow
 
@@ -30,14 +31,15 @@ def Main():
     Notices = {Role: {"Version": 1, "EndpointId": Item["EndpointId"], "RunId": str(uuid.uuid4()),
                      "Generation": str(uuid.uuid4()), "ExpiresUnixMs": NowMs + WorkflowItem.Value["RegistrationTimeout"] * 1000}
                for Role, Item in Setup["Endpoints"].items()}
+    Keys = {Role: LoadKey(Item["KeyFile"]) for Role, Item in Setup["Endpoints"].items()}
     Local = {Role: {"EndpointId": Item["EndpointId"], "PeerIp": "127.0.0.1",
-                    **Bootstrap(Notices[Role], Item["Token"])} for Role, Item in Setup["Endpoints"].items()}
+                    **Bootstrap(Notices[Role], Keys[Role])} for Role, Item in Setup["Endpoints"].items()}
     Run = Assignments(WorkflowItem, Local, {"DelayMs": 0})
     # Bootstrap derivation includes RunId: establish identity first, then replace local credentials.
     for Role, Item in Setup["Endpoints"].items():
         Notices[Role]["RunId"] = Run.RunId
-        Run.Entries[Item["EndpointId"]]["Local"].update(Bootstrap(Notices[Role], Item["Token"]))
-    Clients = {Role: Client("127.0.0.1", Item["LifecyclePort"], Item["EndpointId"], Item["Token"])
+        Run.Entries[Item["EndpointId"]]["Local"].update(Bootstrap(Notices[Role], Keys[Role]))
+    Clients = {Role: Client("127.0.0.1", Item["LifecyclePort"], Item["EndpointId"], Keys[Role])
                for Role, Item in Setup["Endpoints"].items()}
     Root = Path(Setup["Evidence"]) / Run.RunId
     Root.mkdir(parents=True, exist_ok=False)

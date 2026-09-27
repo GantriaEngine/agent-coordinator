@@ -75,12 +75,13 @@ class CodexExec:
             self.OutputBytes = 0
             self.FinalStatus = None
             self.Started = time.monotonic()
-            self.Process = subprocess.Popen(Args, cwd=self.Repository, stdin=subprocess.PIPE,
-                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                            start_new_session=os.name != "nt", **Hidden())
-            self.Tree = ProcessTree(self.Process)
-            self.Process.stdin.write(BOOTSTRAP.encode("utf-8"))
-            self.Process.stdin.close()
+            self.Process, self.Tree = ProcessTree.Start(Args, self.Repository)
+            try:
+                self.Process.stdin.write(BOOTSTRAP.encode("utf-8"))
+                self.Process.stdin.close()
+            except BaseException:
+                self.Tree.Close()
+                raise
             self.Threads = [threading.Thread(target=self.Drain, args=(Stream, Events), daemon=True)
                             for Stream, Events in ((self.Process.stdout, True), (self.Process.stderr, False))]
             for Thread in self.Threads:

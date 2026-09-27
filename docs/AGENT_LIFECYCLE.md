@@ -115,11 +115,24 @@ is a durable consumed-generation ledger. Keep it across daemon restarts. Never
 reset it while old credentials or tickets could remain usable. Rotation requires
 endpoint-owner revocation and a new protected installation identity.
 
+On Windows, keep the 256-bit lifecycle HMAC key in the endpoint user's
+`~/.codex/agent-coordinator/secrets/*.dpapi` file. `StoreKey` uses user-scoped
+DPAPI and restricts the directory/file ACL to that user, SYSTEM and local
+administrators; `LoadKey` fails closed on other platforms. Provision the same
+independent endpoint key to the coordinator user's protected store over an
+approved out-of-band channel, without placing it in a workflow/config file.
+`StoreKey(..., Rotate=True)` replaces a key only by explicit local action;
+`RevokeKey` removes it. Rotation invalidates outstanding wake authentication;
+stop the previous daemon/workflow and retain `used.json` for replay defense.
+
 The bounded daemon is locally launched with `python -m
 agent_coordinator.lifecycle.daemon --config <local-file>`. Its strict local config
-has EndpointId, Repository, Executable, Profile, Version, Token, Port,
+has EndpointId, Repository, Executable, Profile, Version, KeyFile, Port,
 AgentSeconds, StartupSeconds, DaemonSeconds, Tickets and Policy (null or the fixed
-local policy object). It binds loopback only.
+local policy object). The JSON must live under that user's private
+`~/.codex/agent-coordinator` directory; it holds a `KeyFile` path, never the
+persistent key. A config with the previous `Token` field is rejected. It binds
+loopback only.
 For a two-PC deployment, establish an approved SSH local forward for lifecycle
 and reverse forward for control. This keeps existing unencrypted v1 control
 traffic inside SSH. The library can use verified TLS for a direct LAN lifecycle
@@ -178,9 +191,14 @@ HMAC alone is not encryption: use loopback/SSH or verified TLS, never bare LAN.
 The daemon observes the owned process continuously, even without coordinator
 polling. Stop kills the owned tree: Windows Job Object with kill-on-job-close;
 POSIX process group. It also removes the current local ticket and status. A
-normal Codex exit still terminates leftover descendants. Failure to assign the
-Windows job fails the launch. The initial Popen-to-job assignment window and
-host shutdown recovery need further hardening before a production service.
+normal Codex exit still terminates leftover descendants. Windows starts the
+child suspended with a Job-list process attribute and only its three standard
+streams inherited; a Job creation/assignment failure prevents executable code
+from running. An unexpected daemon exit closes its sole Job handle and kills
+the tree. On restart, an interrupted `current.json` is recorded as FAILED in
+`recovery.json`; the old generation remains in the durable replay ledger and
+cannot automatically launch again. POSIX process groups do not have the same
+supervisor-death guarantee and are not a production daemon target.
 Endpoint/user compromise can bypass same-user filesystem/process isolation;
 the prototype does not claim protection against its own administrator.
 

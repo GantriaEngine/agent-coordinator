@@ -41,8 +41,11 @@ wake/status/stop. Lifecycle version 1 is separate; control protocol v1 and the
 manual workflow remain unchanged. This feature revision is `0.2.0.dev0`, not a
 new release. Durable local policy can admit fresh notices without per-run files;
 cross-run resume remains a qualification limit.
-The actual two-PC attempt failed on the worker's installed Codex sandbox runtime;
-see the [readiness evidence and next task](docs/FOUNDATION_2_VALIDATION.md).
+The first two-PC attempt exposed a dockerbox sandbox launch-context failure.
+After the documented interactive-user and task-owned checkout correction, a fresh
+two-PC synthetic run completed through cleanup and IDLE; see the
+[qualification record](docs/FOUNDATION_2_VALIDATION.md). Foundation 2B
+production hardening is tracked separately from that experimental verdict.
 
 - `agent_coordinator.transport`: extracted bounded TCP/JSON envelope, journal,
   manifest and hash generation. Transport version 1 is unchanged.

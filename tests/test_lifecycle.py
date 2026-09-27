@@ -121,6 +121,28 @@ class EndpointTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.Item.StartAgent(self.Notice)
 
+    def test_abrupt_supervisor_restart_records_failure_without_replay(self):
+        for Phase in ("BEFORE_REGISTRATION", "RUNNING", "AFTER_WORKFLOW"):
+            with self.subTest(Phase=Phase), tempfile.TemporaryDirectory() as Temp:
+                Directory = Path(Temp) / ".lifecycle"
+                Adapter = FakeAdapter()
+                First = Endpoint("SERVER", Directory, Adapter)
+                Value = Notice()
+                First.InstallTicket(Ticket(Value))
+                First.StartAgent(Value)
+                if Phase != "BEFORE_REGISTRATION":
+                    Atomic(Directory / "status.json", {"Generation": Value["Generation"],
+                           "RunId": Value["RunId"], "Sequence": 1,
+                           "Status": "IDLE" if Phase == "AFTER_WORKFLOW" else "RUNNING",
+                           "Reason": "NONE", "Detail": ""})
+                Second = Endpoint("SERVER", Directory, FakeAdapter())
+                self.assertEqual("FAILED", Second.GetPresence()["Status"])
+                self.assertEqual("SUPERVISOR_LOST", json.loads((Directory / "recovery.json").read_text())["Reason"])
+                self.assertFalse((Directory / "current.json").exists())
+                self.assertFalse((Directory / "status.json").exists())
+                with self.assertRaises(ValueError):
+                    Second.StartAgent(Value)
+
     def test_startup_timeout_and_no_duplicate_retry(self):
         self.Item.StartAgent(self.Notice)
         self.Now = 3

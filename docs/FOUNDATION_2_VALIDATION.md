@@ -5,6 +5,44 @@ endpoints. The feature remains `0.2.0.dev0` on `codex/foundation-2-lifecycle`;
 no release or tag is published. v0.1.0, canonical
 main and consumer deployment pins remain unchanged.
 
+## Foundation 2B hardening (qualification in progress)
+
+The production-hardening branch replaces persistent plaintext daemon/setup keys
+with endpoint-user DPAPI files under private `.codex/agent-coordinator` ACLs.
+The daemon and synthetic setup use `KeyFile` references; the former `Token`
+config field is rejected. Explicit rotate/revoke functions are provided. The
+existing transient per-generation bootstrap token remains in the locally
+protected `current.json` ticket; it is not the long-lived lifecycle key.
+
+Windows child creation now supplies a Job-list attribute to `CreateProcessW`
+with `CREATE_SUSPENDED` and an explicit inherited standard-handle list. The
+kill-on-close Job exists before the child can execute. A failed launch closes
+the Job and streams. An interrupted daemon's `current.json` is recorded as
+FAILED in `recovery.json` on restart; `used.json` still rejects that generation.
+There is no automatic workflow replay.
+
+On the main Windows endpoint, the 70-test suite, synthetic simulation, static
+checks, wheel build and Windows helper suite passed. An immediate-descendant
+fixture confirmed Job cleanup after abrupt supervisor exit for pre-registration,
+running and post-workflow phase labels. These phase labels exercise process
+lifetime; the durable recovery state is separately covered by endpoint tests.
+
+On dockerbox, a temporary ordinary `HOSTPC\foundation2bprobe` profile was
+created solely for Agent Coordinator paths. Under its actual impersonated user
+token and loaded profile, reading the host endpoint's protected key/config and
+opening the host Codex profile for write were denied. It could read the shared
+test repository, but could not decrypt a copied DPAPI blob or authenticate to a
+bounded loopback lifecycle service merely by naming `SERVER`. The account,
+profile, test key and listener were removed; no ACL was broadened. The first
+Task Scheduler probe did not start, and a credentialed process launch failed
+with DLL initialization error; the successful direct impersonation with a
+loaded user profile is the recorded isolation result.
+
+This is **not yet a Foundation 2B readiness verdict**. Fresh hardened two-PC
+workflow, final package/CI evidence and the required supervisor-death physical
+probe are pending. No Gargantuan qualification may consume this revision until
+those gates pass.
+
 Starting canonical main: `35d6ce97e9cb255e8ccfb27b3a6d3f97543a5c45`.
 Initial implementation: `f026acbe8b5828a21e792a3b0c5b4acb1a9b8b8b`.
 The follow-up source `03676fe32378d4150edb9e62c5691699a8b780ee` adds typed
@@ -174,11 +212,9 @@ It cannot be widened by an Agent Coordinator wake. A separate populated user
 profile was not used for a cross-user access probe, so this run does not claim
 full multi-user host isolation.
 
-For production service use, harden the Popen-to-Job assignment window, abrupt
-supervisor-death recovery (including POSIX), protected local key/config storage,
-and a supported interactive-user lifecycle service model that does not depend on
-an already logged-in desktop. Network Resume remains intentionally unavailable
-until cross-run session-context isolation is qualified. Keep PR #1 draft until
-its final Windows/Linux CI passes and a maintainer reviews this experimental
-scope; do not merge or publish a release automatically. The exact next task is
-that production-hardening review, not a Foundation 3L physical qualification.
+At the experimental qualification, the outstanding work was the Popen-to-Job
+assignment window, abrupt-supervisor-death recovery, protected local key/config
+storage and a supported lifecycle service model. The Foundation 2B section above
+records the subsequent hardening and remaining qualification gates. Network
+Resume remains unavailable until cross-run session-context isolation is
+qualified. Keep PR #1 draft; do not merge or publish a release automatically.

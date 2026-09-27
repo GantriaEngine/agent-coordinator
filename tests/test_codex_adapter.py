@@ -71,9 +71,7 @@ class AdapterTests(unittest.TestCase):
                 Args = [sys.executable, str(Fixture), "parent", str(File)]
                 if Exit:
                     Args.append("exit")
-                Process = subprocess.Popen(Args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                            start_new_session=os.name != "nt", **Hidden())
-                Tree = ProcessTree(Process)
+                Process, Tree = ProcessTree.Start(Args, Path(__file__).parent)
                 try:
                     Process.stdin.write(b"go\n")
                     Process.stdin.close()
@@ -92,3 +90,25 @@ class AdapterTests(unittest.TestCase):
                 finally:
                     Tree.Close()
                     Process.stdout.close()
+                    Process.stderr.close()
+
+    @unittest.skipUnless(os.name == "nt", "Windows Job kill-on-supervisor-close")
+    def test_immediate_descendant_dies_on_abrupt_supervisor_exit(self):
+        Fixture = Path(__file__).parent / "fixtures/supervisor_death.py"
+        Root = Path(__file__).parents[1]
+        for Phase in ("BEFORE_REGISTRATION", "RUNNING", "AFTER_WORKFLOW"):
+            with self.subTest(Phase=Phase), tempfile.TemporaryDirectory() as Temp:
+                Clock, Marker = Path(Temp) / "clock", Path(Temp) / "marker.json"
+                Environment = {**os.environ, "PYTHONPATH": str(Root)}
+                Supervisor = subprocess.Popen([sys.executable, str(Fixture), str(Clock),
+                                               str(Marker), Phase], cwd=Root, env=Environment,
+                                               **Hidden())
+                self.assertEqual(23, Supervisor.wait(timeout=8))
+                self.assertTrue(Marker.exists())
+                Until = time.monotonic() + 3
+                while not Clock.exists() and time.monotonic() < Until:
+                    time.sleep(0.02)
+                self.assertTrue(Clock.exists())
+                Before = Clock.read_text()
+                time.sleep(0.2)
+                self.assertEqual(Before, Clock.read_text())
