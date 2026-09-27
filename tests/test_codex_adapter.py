@@ -1,4 +1,5 @@
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -10,6 +11,7 @@ from unittest.mock import patch
 import uuid
 
 from agent_coordinator.lifecycle.codex import BOOTSTRAP, CodexExec
+from agent_coordinator.lifecycle.endpoint import Endpoint
 from agent_coordinator.lifecycle.process import ProcessTree
 from agent_coordinator.transport import Hidden
 
@@ -100,11 +102,12 @@ class AdapterTests(unittest.TestCase):
             with self.subTest(Phase=Phase), tempfile.TemporaryDirectory() as Temp:
                 Clock, Marker = Path(Temp) / "clock", Path(Temp) / "marker.json"
                 Environment = {**os.environ, "PYTHONPATH": str(Root)}
-                Supervisor = subprocess.Popen([sys.executable, str(Fixture), str(Clock),
-                                               str(Marker), Phase], cwd=Root, env=Environment,
+                Supervisor = subprocess.Popen([sys.executable, str(Fixture), Temp, Phase],
+                                              cwd=Root, env=Environment,
                                                **Hidden())
                 self.assertEqual(23, Supervisor.wait(timeout=8))
                 self.assertTrue(Marker.exists())
+                Notice = json.loads(Marker.read_text())["Notice"]
                 Until = time.monotonic() + 3
                 while not Clock.exists() and time.monotonic() < Until:
                     time.sleep(0.02)
@@ -112,3 +115,11 @@ class AdapterTests(unittest.TestCase):
                 Before = Clock.read_text()
                 time.sleep(0.2)
                 self.assertEqual(Before, Clock.read_text())
+                Restart = Endpoint("SERVER", Path(Temp) / ".lifecycle", object())
+                self.assertEqual("FAILED", Restart.GetPresence()["Status"])
+                self.assertIn(Notice["Generation"], Restart.Used)
+                Recovery = json.loads((Path(Temp) / ".lifecycle" / "recovery.json").read_text())
+                self.assertEqual(Notice["Generation"], Recovery["Generation"])
+                self.assertEqual("SUPERVISOR_LOST", Recovery["Reason"])
+                with self.assertRaises(ValueError):
+                    Restart.StartAgent(Notice)
