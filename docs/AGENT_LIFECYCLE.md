@@ -33,9 +33,11 @@ Research checked current official documentation and installed CLI help:
 | [Self-hosted executor](https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted) | Agents API harness with local `codex exec-server`, outbound connection and restricted environment key | Requires separate application/environment provisioning; not used |
 | MCP exposure | Current SDK docs say the old `codex mcp-server` was removed; use app-server | No invented MCP lifecycle server |
 
-Installed versions observed: controlling PC `codex-cli 0.155.0-alpha.16`;
-dockerbox `codex-cli 0.158.0-alpha.2`. Each installation must pin its exact
-`--version` output locally; mismatches reject before agent start. The adapter uses
+Installed and experimentally qualified versions: controlling PC
+`codex-cli 0.155.0-alpha.16`; dockerbox `codex-cli 0.158.0-alpha.2`. A copy of
+the main version still timed out on dockerbox under SSH, so version alignment
+did not solve its Windows sandbox runner failure. Each installation must pin its
+exact `--version` output locally; mismatches reject before agent start. The adapter uses
 `exec --json --color never`, a locally selected `--profile`, and fixed stdin.
 `thread.started.thread_id`, `turn.completed`, `turn.failed` and `error` events
 are interpreted. An installed `--output-schema` permits only final IDLE/NONE
@@ -56,7 +58,22 @@ profile. `existing-local-policy` explicitly inherits the user's existing Codex
 configuration without overriding sandbox, approval, model or authentication
 settings. Broad existing local permissions are an endpoint trust decision, not
 authority supplied by a wake request. Prefer a restricted dedicated profile.
-Ensure the installed Python runtime is on the agent's PATH.
+Ensure the installed Python runtime is available to the fixed bootstrap command.
+
+For the tested Windows setup, an endpoint-owned named profile selected
+`workspace-write` with network access disabled and approvals set to `never`,
+while the base config kept `windows.sandbox = "elevated"`. Dockerbox's sandbox
+runner worked under a limited, medium-integrity **interactive** endpoint-user
+token, but timed out at the runner pipe under its SSH/network and S4U/batch
+launch contexts. A logged-in interactive session and locally started bounded
+task were required for this experiment. Keep the profile in the endpoint user's
+`.codex` directory outside the workspace. The locally approved workspace root
+and `.git` must be owned by the endpoint user so Codex can apply its own
+sandbox ACLs; a pre-existing `.lifecycle` directory must inherit the resulting
+workspace write ACE. Correct only task-owned paths and retain the preferred
+elevated sandbox. The initial elevated-sandbox setup may require administrator
+maintenance, but the qualified agent launch itself used a non-administrator
+token. See [the qualification evidence](FOUNDATION_2_VALIDATION.md).
 
 Install [the small durable bootstrap](bootstrap/AGENT_COORDINATOR.md) as
 `AGENT_COORDINATOR.md` in that repository. It invokes only the installed fixed
@@ -107,7 +124,9 @@ For a two-PC deployment, establish an approved SSH local forward for lifecycle
 and reverse forward for control. This keeps existing unencrypted v1 control
 traffic inside SSH. The library can use verified TLS for a direct LAN lifecycle
 connection; the shipping daemon does not manage certificates or expose a LAN port.
-No service installation, elevation or machine-wide changes are required.
+No coordinator service installation, elevation at runtime or machine-wide
+security relaxation is required. The Windows interactive-user launch context
+above is a qualification constraint, not yet a production service design.
 
 ## Presence and bounds
 
