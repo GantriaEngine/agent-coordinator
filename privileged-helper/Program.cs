@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace PhysicalQualifier.CaptureService;
+namespace AgentCoordinator.CaptureService;
 
 internal static class Program
 {
@@ -21,14 +21,14 @@ internal static class Program
             ServiceBase.Run(new CaptureService());
             return 0;
         }
-        Console.Error.WriteLine("Usage: PhysicalQualifier.CaptureService.exe start|stop|status <evidence-directory> <run-uuid> <endpoint-pid> | --service");
+        Console.Error.WriteLine("Usage: AgentCoordinator.CaptureService.exe start|stop|status <evidence-directory> <run-uuid> <endpoint-pid> | --service");
         return 2;
     }
 }
 
 internal sealed class CaptureClient
 {
-    private const string PipeName = "GargantuanPhysicalQualifierCapture-v1";
+    private const string PipeName = "GantriaAgentCoordinatorCapture-v1";
 
     public static int Send(string Operation, string EvidenceDirectory, string RunId, int LeasePid)
     {
@@ -51,7 +51,7 @@ internal sealed class CaptureClient
         }
         catch (Exception Error)
         {
-            Console.Error.WriteLine("[Qualification:CaptureService] " + Error.Message);
+            Console.Error.WriteLine("[Coordinator:CaptureService] " + Error.Message);
             return 1;
         }
     }
@@ -65,21 +65,25 @@ internal sealed record ActiveCapture(string RunId, string EvidenceDirectory, Dat
 
 internal sealed class CaptureService : ServiceBase
 {
-    private const string PipeName = "GargantuanPhysicalQualifierCapture-v1";
+    private const string PipeName = "GantriaAgentCoordinatorCapture-v1";
     private const int MaximumRequestBytes = 16384;
     private static readonly TimeSpan CaptureLimit = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(15);
-    private static readonly string BaseDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Gargantuan", "PhysicalQualifierCapture");
+    private readonly string BaseDirectory;
     private readonly CancellationTokenSource StopSource = new();
     private readonly SemaphoreSlim StateLock = new(1, 1);
     private CaptureConfig Config = null!;
     private ActiveCapture? Active;
     private bool RecoveryBlocked;
 
-    public CaptureService()
+    public CaptureService() : this(null) { }
+
+    // Internal local test seam; never selected by a pipe request or agent message.
+    internal CaptureService(string? LocalTestDirectory)
     {
-        ServiceName = "GargantuanPhysicalQualifierCapture";
+        BaseDirectory = LocalTestDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "GantriaEngine", "AgentCoordinatorCapture");
+        ServiceName = "GantriaAgentCoordinatorCapture";
         CanStop = true;
         AutoLog = true;
     }
@@ -190,6 +194,9 @@ internal sealed class CaptureService : ServiceBase
 
     private async Task<CaptureResponse> ExecuteAsync(CaptureRequest Request, CancellationToken Token)
     {
+        if (Request.Version != 1 || !Guid.TryParse(Request.RunId, out var RunGuid) ||
+            RunGuid.ToString("D") != Request.RunId || Request.Operation is not ("start" or "stop" or "status"))
+            return new(false, Request.Operation, Request.RunId, "denied", "invalid request shape");
         await StateLock.WaitAsync(Token).ConfigureAwait(false);
         try
         {

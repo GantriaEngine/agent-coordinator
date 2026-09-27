@@ -1,0 +1,689 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/GantriaEngine/agent-coordinator/protocol/schema-control-v1",
+  "title": "Schema control v1 over transport v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "PULL_ASSIGNMENT"
+        },
+        "EndpointId": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "EndpointId"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "ASSIGNMENT"
+        },
+        "Assignment": {
+          "$ref": "#/$defs/Assignment"
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Assignment"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "REGISTER"
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "SchemaId": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "SchemaVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "SchemaHash": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Capabilities": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9.-]*\\.v[1-9][0-9]{0,3}$"
+          }
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Role",
+        "SchemaId",
+        "SchemaVersion",
+        "SchemaHash",
+        "Capabilities"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "REGISTERED"
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Role"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "STAGED"
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Role"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "ARMED"
+        },
+        "ExecutionTimeout": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "ExecutionTimeout"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "CLEANED"
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Role",
+        "Success"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "START"
+        },
+        "Index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Capability": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "From": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "To": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Parameters": {
+          "$ref": "#/$defs/Parameters"
+        },
+        "Timeout": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ExecutionTimeout": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Index",
+        "Role",
+        "Capability",
+        "From",
+        "To",
+        "Parameters",
+        "Timeout",
+        "ExecutionTimeout"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "LIVE"
+        },
+        "Index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Success": {
+          "type": "boolean"
+        },
+        "Evidence": {
+          "$ref": "#/$defs/Evidence"
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Index",
+        "Role",
+        "Success",
+        "Evidence"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "RESULT"
+        },
+        "Index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Role": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "Success": {
+          "type": "boolean"
+        },
+        "Evidence": {
+          "$ref": "#/$defs/Evidence"
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Index",
+        "Role",
+        "Success",
+        "Evidence"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "COMPLETE"
+        },
+        "Success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Success"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "TimestampUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Type": {
+          "const": "ABORT"
+        },
+        "Detail": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "Version",
+        "RunId",
+        "Sequence",
+        "TimestampUnixMs",
+        "Token",
+        "Type",
+        "Detail"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "Assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "RunId",
+        "Token",
+        "Role",
+        "SchemaId",
+        "SchemaVersion",
+        "SchemaHash",
+        "Parameters",
+        "ExpiresUnixMs"
+      ],
+      "properties": {
+        "RunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "Token": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Role": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,95}$"
+        },
+        "SchemaId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9.-]{0,95}$"
+        },
+        "SchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "SchemaHash": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Parameters": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        },
+        "ExpiresUnixMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Evidence": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Path",
+          "SHA256",
+          "Bytes"
+        ],
+        "properties": {
+          "Path": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "SHA256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          },
+          "Bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "Parameters": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000
+      }
+    }
+  }
+}

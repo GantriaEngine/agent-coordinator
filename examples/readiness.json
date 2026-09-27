@@ -1,0 +1,14 @@
+{
+  "SchemaId": "example.client-server-readiness",
+  "SchemaVersion": 1,
+  "Roles": {"SERVER": ["example.server-ready.v1"], "CLIENT": ["example.client-result.v1"]},
+  "States": ["staged", "server-live", "complete"],
+  "Transitions": [
+    {"From": "staged", "To": "server-live", "Role": "SERVER", "Capability": "example.server-ready.v1", "Response": "LIVE", "Parameters": ["DelayMs"], "Timeout": 2},
+    {"From": "server-live", "To": "complete", "Role": "CLIENT", "Capability": "example.client-result.v1", "Response": "RESULT", "Parameters": [], "Timeout": 2}
+  ],
+  "Parameters": {"DelayMs": {"Minimum": 0, "Maximum": 100}},
+  "RegistrationTimeout": 5,
+  "ExecutionTimeout": 5,
+  "Abort": "local-cleanup"
+}

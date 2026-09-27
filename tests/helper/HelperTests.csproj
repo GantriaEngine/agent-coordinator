@@ -4,10 +4,10 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>PhysicalQualifier.CaptureService</AssemblyName>
-    <RootNamespace>PhysicalQualifier.CaptureService</RootNamespace>
+    <StartupObject>AgentCoordinator.CaptureService.HelperTests</StartupObject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../privileged-helper/Program.cs" Link="CaptureService.cs" />
     <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
   </ItemGroup>

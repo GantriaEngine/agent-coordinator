@@ -37,7 +37,7 @@ class Journal:
         self.Stream = (self.Directory / "control.jsonl").open("w", encoding="utf-8")
 
     def Write(self, Event, **Fields):
-        Fields.pop("Token", None)
+        Fields = Redact(Fields)
         Row = {"TimestampUnixMs": time.time_ns() // 1000000, "Event": Event, **Fields}
         self.Stream.write(json.dumps(Row) + "\n")
         self.Stream.flush()
@@ -45,6 +45,7 @@ class Journal:
             raise ValueError("control log bound exceeded")
 
     def Close(self, Result):
+        Result = Redact(Result)
         self.Write("RESULT", **Result)
         self.Stream.close()
         Save(self.Directory / "result.json", Result)
@@ -52,6 +53,14 @@ class Journal:
                     "Bytes": File.stat().st_size} for File in sorted(self.Directory.rglob("*"))
                    if File.is_file() and File.name != "evidence-manifest.json"]
         Save(self.Directory / "evidence-manifest.json", {"Files": Entries})
+
+
+def Redact(Value):
+    if isinstance(Value, dict):
+        return {Key: Redact(Item) for Key, Item in Value.items() if Key != "Token"}
+    if isinstance(Value, list):
+        return [Redact(Item) for Item in Value]
+    return Value
 
 
 class Channel:
