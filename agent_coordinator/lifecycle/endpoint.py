@@ -1,5 +1,6 @@
 """Local admission and supervision. Wake cannot provision or edit a ticket."""
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -11,7 +12,20 @@ from .presence import Presence, ValidateNotice
 def Atomic(File, Value):
     Temporary = File.with_suffix(".tmp")
     Temporary.write_text(json.dumps(Value) + "\n", encoding="utf-8")
-    Temporary.replace(File)
+    Deadline = time.monotonic() + 1
+    try:
+        while True:
+            try:
+                Temporary.replace(File)
+                return
+            except PermissionError:
+                # A concurrent Windows reader can briefly hold status.json
+                # without FILE_SHARE_DELETE. Never extend the retry beyond 1s.
+                if os.name != "nt" or time.monotonic() >= Deadline:
+                    raise
+                time.sleep(0.01)
+    finally:
+        Temporary.unlink(missing_ok=True)
 
 
 class Endpoint:

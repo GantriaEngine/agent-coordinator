@@ -86,6 +86,10 @@ The shipping daemon is bounded and loopback-only; use approved SSH forwarding.
 Direct LAN library use requires verified TLS. Never forward OpenAI credentials;
 each Codex process uses its endpoint's existing local auth/configuration. Broad
 Codex permissions remain existing endpoint trust, not a coordinator authority.
-Windows job assignment startup race and crash/restart recovery need further work;
-do not deploy this revision as a production service.
+Foundation 2B creates Windows Codex children inside a kill-on-close Job before
+their first instruction and records interrupted generations as failed on daemon
+restart. Protected user-scoped key storage and the two-endpoint hardening result
+are tracked in [Foundation 2 validation](FOUNDATION_2_VALIDATION.md). Retain
+the locally approved logged-in interactive-user launch model; unattended service
+operation is not qualified by these tests.
 See [lifecycle setup and limits](AGENT_LIFECYCLE.md).

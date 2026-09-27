@@ -43,6 +43,14 @@ workflow, final package/CI evidence and the required supervisor-death physical
 probe are pending. No Gargantuan qualification may consume this revision until
 those gates pass.
 
+The first protected-key two-PC workflow `01c7fbe3-970e-4c73-9c34-c655f4083814`
+failed before barrier. The worker pulled and registered, then its local status
+writer hit a Windows access-denied replacement of `status.tmp` over
+`status.json` while the supervisor could read that file. It sent ABORT, closing
+the host listener before the client could pull. The client connection-refused
+error is secondary. A bounded retry for this Windows reader/replacement race is
+under test; this failed run is not a qualification pass or a physical precursor.
+
 Starting canonical main: `35d6ce97e9cb255e8ccfb27b3a6d3f97543a5c45`.
 Initial implementation: `f026acbe8b5828a21e792a3b0c5b4acb1a9b8b8b`.
 The follow-up source `03676fe32378d4150edb9e62c5691699a8b780ee` adds typed

@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 import uuid
 
 from agent_coordinator.control import Assignments, Host, Join
@@ -94,6 +95,23 @@ class PresenceTests(unittest.TestCase):
 
 
 class EndpointTests(unittest.TestCase):
+    def test_atomic_status_retries_transient_windows_replace_denial(self):
+        with tempfile.TemporaryDirectory() as Temp:
+            File = Path(Temp) / "status.json"
+            File.write_text("old")
+            Original = Path.replace
+            Calls = []
+            def Flaky(Source, Target):
+                Calls.append(1)
+                if len(Calls) == 1:
+                    raise PermissionError("brief reader lock")
+                return Original(Source, Target)
+            with patch("agent_coordinator.lifecycle.endpoint.os.name", "nt"), patch.object(Path, "replace", Flaky):
+                Atomic(File, {"Status": "RUNNING"})
+            self.assertEqual(2, len(Calls))
+            self.assertEqual("RUNNING", json.loads(File.read_text())["Status"])
+            self.assertFalse(File.with_suffix(".tmp").exists())
+
     def setUp(self):
         self.Temp = tempfile.TemporaryDirectory()
         self.Directory = Path(self.Temp.name) / ".lifecycle"
