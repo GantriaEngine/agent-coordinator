@@ -4,5 +4,6 @@ bin/
 obj/
 publish/
 dist/
+build/
 *.egg-info/
 .runs/

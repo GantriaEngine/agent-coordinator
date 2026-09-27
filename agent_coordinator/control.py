@@ -7,7 +7,7 @@ import time
 import uuid
 
 from .transport import Channel
-from .workflow import Exact
+from .workflow import Exact, ValidateResult
 
 
 FIELDS = {
@@ -196,9 +196,7 @@ def Host(HostIp, Port, AssignmentsItem, Journal, Listening=None):
                             Row["Role"] != Step["Role"] or Row["Index"] != Index or Row["Success"] is not True):
                         raise ValueError("unauthorized transition or failed result")
                     # Metadata only, never artifact content or executable payloads.
-                    from .workflow import Catalog
-                    Catalog({"result.v1": lambda Parameters, Context: {"Success": Row["Success"], "Evidence": Row["Evidence"]}}, lambda: None).Invoke(
-                        "result.v1", ["result.v1"], {}, StepDeadline)
+                    ValidateResult({"Success": Row["Success"], "Evidence": Row["Evidence"]})
                     Results.append({Key: Value for Key, Value in Row.items() if Key != "Token"})
                     Received = True
         for Item in Peers.values():

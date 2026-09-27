@@ -122,15 +122,7 @@ class Catalog:
         Context.Check()
         Result = self.Handlers[Name](dict(Parameters), Context)
         Context.Check()
-        Exact(Result, ("Success", "Evidence"))
-        if type(Result["Success"]) is not bool or not isinstance(Result["Evidence"], list) or len(Result["Evidence"]) > 32:
-            raise ValueError("invalid result")
-        for Item in Result["Evidence"]:
-            Exact(Item, ("Path", "SHA256", "Bytes"))
-            if (not isinstance(Item["Path"], str) or len(Item["Path"]) > 512 or
-                    not isinstance(Item["SHA256"], str) or not re.fullmatch(r"[a-fA-F0-9]{64}", Item["SHA256"]) or
-                    type(Item["Bytes"]) is not int or Item["Bytes"] < 0):
-                raise ValueError("invalid evidence metadata")
+        ValidateResult(Result)
         return Result
 
 
@@ -141,3 +133,15 @@ class Operation:
     def Check(self):
         if time.monotonic() >= self.Deadline:
             raise TimeoutError("capability deadline expired")
+
+
+def ValidateResult(Result):
+    Exact(Result, ("Success", "Evidence"))
+    if type(Result["Success"]) is not bool or not isinstance(Result["Evidence"], list) or len(Result["Evidence"]) > 32:
+        raise ValueError("invalid result")
+    for Item in Result["Evidence"]:
+        Exact(Item, ("Path", "SHA256", "Bytes"))
+        if (not isinstance(Item["Path"], str) or len(Item["Path"]) > 512 or
+                not isinstance(Item["SHA256"], str) or not re.fullmatch(r"[a-fA-F0-9]{64}", Item["SHA256"]) or
+                type(Item["Bytes"]) is not int or Item["Bytes"] < 0):
+            raise ValueError("invalid evidence metadata")
