@@ -38,6 +38,35 @@ class EndpointCompatibilityTests(unittest.TestCase):
     tearDown = test_legacy.ExtractedProtocolTests.tearDown
     Read = test_legacy.ExtractedProtocolTests.Read
 
+    def test_worker_rejects_finalize_before_probe_result(self):
+        Config = {**self.Config, "Role": "SERVER", "EvidenceDir": str(self.Root / "early-finalize-worker")}
+        with socket.socket() as Listener:
+            Listener.bind(("127.0.0.1", 0))
+            Config["Port"] = Listener.getsockname()[1]
+            Listener.listen(1)
+            Listener.settimeout(3)
+            EndpointResult = {}
+
+            def Helper():
+                EndpointResult["Code"] = Q.Endpoint(Config)
+
+            Worker = threading.Thread(target=Helper)
+            Worker.start()
+            Sock, _ = Listener.accept()
+            Link = Q.Channel(Sock, Config, Q.Journal(self.Root / "early-finalize-coordinator"))
+            self.Links.append(Link)
+            self.Read(Link, "STAGE_READY")
+            Link.Send("FINALIZE")
+            self.Read(Link, "FAILED")
+            Worker.join(4)
+            self.assertFalse(Worker.is_alive())
+        self.assertEqual(1, EndpointResult["Code"])
+        Result = json.loads((Path(Config["EvidenceDir"]) / "result.json").read_text())
+        self.assertFalse(Result["Success"])
+        self.assertEqual("ABORT", Result["Classification"])
+        Control = (Path(Config["EvidenceDir"]) / "control.jsonl").read_text()
+        self.assertIn('"Detail": "unexpected command FINALIZE in STAGED"', Control)
+
     def test_worker_accepts_delayed_finalize_after_reporting_success(self):
         Config = {**self.Config, "Role": "SERVER", "EvidenceDir": str(self.Root / "late-finalize-worker"),
                   "CaptureCommand": ["test-only"]}

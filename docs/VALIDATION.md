@@ -1,5 +1,12 @@
 # Validation scope
 
+The consuming Gargantuan task's follow-up regressions are mirrored for the shared
+legacy endpoint state machine: delayed FINALIZE after a completed server result
+is accepted, FINALIZE while still STAGED rejects, and a live-probe abort cleans up.
+Its Mellanox miniport plus TCP/IPv4 capture-layer selection, packet-direction
+acceptance and idempotent local adapter cleanup remain project-owned. Changes
+to those physical assumptions do not belong in the generic capability service.
+
 Python suites preserve the extracted legacy protocol cases and add strict schema,
 capability, framing/auth/replay, assignment expiry and two-endpoint simulation
 coverage. Original project-specific artifact/stage/hook/child ownership tests stay
