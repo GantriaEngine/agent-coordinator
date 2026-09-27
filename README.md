@@ -41,6 +41,8 @@ wake/status/stop. Lifecycle version 1 is separate; control protocol v1 and the
 manual workflow remain unchanged. This feature revision is `0.2.0.dev0`, not a
 new release. Durable local policy can admit fresh notices without per-run files;
 cross-run resume remains a qualification limit.
+The actual two-PC attempt failed on the worker's installed Codex sandbox runtime;
+see the [readiness evidence and next task](docs/FOUNDATION_2_VALIDATION.md).
 
 - `agent_coordinator.transport`: extracted bounded TCP/JSON envelope, journal,
   manifest and hash generation. Transport version 1 is unchanged.

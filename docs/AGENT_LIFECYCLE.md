@@ -37,8 +37,11 @@ Installed versions observed: controlling PC `codex-cli 0.155.0-alpha.16`;
 dockerbox `codex-cli 0.158.0-alpha.2`. Each installation must pin its exact
 `--version` output locally; mismatches reject before agent start. The adapter uses
 `exec --json --color never`, a locally selected `--profile`, and fixed stdin.
-Only `thread.started.thread_id`, `turn.completed`, `turn.failed` and `error`
-events are interpreted. Other model/tool text is discarded, never executed.
+`thread.started.thread_id`, `turn.completed`, `turn.failed` and `error` events
+are interpreted. An installed `--output-schema` permits only final IDLE/NONE
+or NEEDS_USER with an allowlisted reason through `item.completed` agent-message
+JSON. All other model/tool text is discarded, never executed. A model IDLE report
+cannot substitute for validated bootstrap/control completion.
 
 The low-level adapter supports explicit continuation of its own completed local
 UUID session using `exec resume`; the network endpoint deliberately does not
@@ -129,16 +132,19 @@ one-second server read timeout, and at most 600 seconds per daemon/agent. Startu
 is separately bounded to 1..120 seconds. Output is drained and capped at 2 MiB
 with a 64 KiB individual event limit. The existing workflow bounds still apply.
 
-The status tunnel is a bounded local JSON observation file and read-only network
-presence snapshots. Unknown fields, stale generations and oversized files fail
+The status tunnel is a bounded local JSON observation file, strictly typed CLI
+final escalation and read-only network presence snapshots. Unknown fields, stale generations and oversized files fail
 closed. Diagnostic text is inert. There is no peer ReportStatus, SendPrompt,
 Approve, StartCapability or START operation on the lifecycle channel.
 
 NEEDS_USER reasons include UAC_APPROVAL, PHYSICAL_INTERVENTION,
 SECURITY_DECISION, MISSING_CAPABILITY and AUTH_REQUIRED. The fixed local reporter
-accepts a typed reason only. Reporting never grants approval; the endpoint's
+accepts a typed reason only. If shell/reporting tools cannot run, Codex can return
+the same typed NEEDS_USER condition through its installed final output schema.
+Reporting never grants approval; the endpoint's
 existing mechanism remains authoritative. CLI errors are reported as failure,
-not guessed to be an approval request from model prose.
+not guessed to be an approval request from model prose. Escalation terminates
+the owned agent and leaves workflow deadlines/abort authoritative.
 
 ## Credentials, stop and failure
 

@@ -112,6 +112,15 @@ class Endpoint:
         Agent = self.Adapter.GetAgentStatus()
         if Agent["AgentId"] is not None:
             self.Presence.AgentId = Agent["AgentId"]
+        Escalation = Agent.get("Escalation")
+        if Escalation is not None:
+            Exact(Escalation, ("Status", "Reason"))
+            if Escalation["Status"] != "NEEDS_USER":
+                raise ValueError("invalid adapter escalation")
+            if self.Presence.Status != "NEEDS_USER":
+                self.Set("NEEDS_USER", Escalation["Reason"])
+            self.Adapter.StopAgent()
+            return
         File = self.Directory / "status.json"
         if File.exists():
             if File.stat().st_size > 2048:

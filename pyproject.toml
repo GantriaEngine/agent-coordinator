@@ -13,4 +13,4 @@ license = {file = "LICENSE"}
 packages = ["agent_coordinator", "agent_coordinator.lifecycle"]
 
 [tool.setuptools.package-data]
-agent_coordinator = ["schemas/*.json"]
+agent_coordinator = ["schemas/*.json", "lifecycle/*.json"]

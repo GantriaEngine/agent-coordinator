@@ -183,6 +183,15 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
         self.assertEqual(1, self.Adapter.Starts)
 
+    def test_typed_escalation_works_when_bootstrap_tool_unavailable(self):
+        self.Item.StartAgent(self.Notice)
+        self.Adapter.GetAgentStatus = lambda: {"Active": False, "Success": False, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "SECURITY_DECISION"}}
+        self.Now = 1
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+        self.assertFalse(self.Item.Registered)
+        self.assertFalse(self.Adapter.Active)
+
     def test_unknown_expired_wrong_endpoint_and_payload_rejected(self):
         for Change in ({"Shell": "whoami"}, {"Executable": "powershell"}, {"Capabilities": ["evil.v1"]},
                        {"Prompt": "approve elevated"}, {"EndpointId": "CLIENT"}, {"ExpiresUnixMs": 0},

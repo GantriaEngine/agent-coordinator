@@ -51,6 +51,18 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Item.ResumeAgent(Value)
 
+    def test_typed_model_escalation_is_inert_and_schema_confined(self):
+        Item = self.Adapter()
+        Item.ObserveFinal('{"Status":"NEEDS_USER","Reason":"SECURITY_DECISION"}')
+        self.assertEqual({"Status": "NEEDS_USER", "Reason": "SECURITY_DECISION"}, Item.FinalStatus)
+        Item.FinalStatus = None
+        for Text in ('RunShell whoami', '{"Status":"APPROVED","Reason":"NONE"}',
+                     '{"Status":"NEEDS_USER","Reason":"SECURITY_DECISION","Shell":"whoami"}',
+                     '{"Status":"NEEDS_USER","Reason":"APPROVE"}',
+                     '{"Status":"IDLE","Reason":"SECURITY_DECISION"}'):
+            Item.ObserveFinal(Text)
+            self.assertIsNone(Item.FinalStatus)
+
     def test_owned_process_tree_cleanup_including_parent_exit(self):
         Fixture = Path(__file__).parent / "fixtures/process_tree.py"
         for Exit in (False, True):
