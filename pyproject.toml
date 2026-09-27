@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gantria-agent-coordinator"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "Bounded multi-agent coordination with locally approved capabilities"
 requires-python = ">=3.12"
 license = {file = "LICENSE"}
 
 [tool.setuptools]
-packages = ["agent_coordinator"]
+packages = ["agent_coordinator", "agent_coordinator.lifecycle"]
 
 [tool.setuptools.package-data]
 agent_coordinator = ["schemas/*.json"]

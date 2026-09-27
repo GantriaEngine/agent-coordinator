@@ -8,6 +8,10 @@ and GantriaEngine's telemetry infrastructure.
 > The protocol coordinates capabilities; it does not transmit authority.
 >
 > Natural-language agent communication does not directly invoke endpoint capabilities.
+>
+> Agent lifecycle control may cause an authorized agent to become active, but it
+> MUST NOT grant that agent capabilities or authority not already authorized
+> locally by the endpoint and workflow.
 
 A host agent instantiates an installed workflow. Worker agents pull fresh role
 assignments, register locally approved capabilities, wait at a barrier, execute
@@ -30,6 +34,13 @@ The helper tests use a harmless locally installed mock hook and exercise the rea
 90-second duration limit; they do not install a service or change NIC policy.
 
 ## Architecture and usage
+
+Foundation 2 development adds optional [Codex lifecycle and presence](docs/AGENT_LIFECYCLE.md).
+It uses fixed local bootstrap, endpoint-admitted tickets and authenticated bounded
+wake/status/stop. Lifecycle version 1 is separate; control protocol v1 and the
+manual workflow remain unchanged. This feature revision is `0.2.0.dev0`, not a
+new release. Durable local policy can admit fresh notices without per-run files;
+cross-run resume remains a qualification limit.
 
 - `agent_coordinator.transport`: extracted bounded TCP/JSON envelope, journal,
   manifest and hash generation. Transport version 1 is unchanged.

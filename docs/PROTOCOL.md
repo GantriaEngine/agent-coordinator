@@ -50,3 +50,12 @@ Evidence metadata is Path, SHA256, Bytes; maximum 32 entries per result, bounded
 by the frame limit. Journals/logs are capped at 16 MiB; manifests hash every local
 evidence file except themselves. Bulk archive transfer is a separate project-owned
 operation after cleanup. Metadata paths are never opened/executed by the host.
+# Optional lifecycle plane
+
+Lifecycle request/reply v1 is a distinct authenticated channel; it does not add
+message types to control v1. See [AGENT_LIFECYCLE.md](AGENT_LIFECYCLE.md).
+Its closed operations are GetPresence, StartAgent, GetAgentStatus and StopAgent.
+An exact local wake notice cannot supply capabilities, shell, prompt or approval.
+Fresh protocol v1 assignment pull and registration still establish the barrier.
+Optional local Join expectations reject a different run or role before registration.
+Presence, diagnostics and CLI completion cannot trigger a control transition.

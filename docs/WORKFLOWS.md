@@ -26,3 +26,13 @@ Each operation is bounded by the smaller of its timeout and remaining execution
 budget. Abort is exactly `local-cleanup`; it cannot define arbitrary actions.
 Loops, branches, dynamic role allocation and richer typed project parameters are
 future work requiring a separate schema version and review.
+# Optional offline-agent wake
+
+Locally admit a lifecycle ticket or install a durable policy for a pinned
+role/schema/catalog and fixed coordinator address. Then create the
+control run, listen, and wake the admitted generation. Wake carries only a run
+notice. The fixed bootstrap pulls a fresh assignment and registers normally;
+agents starting or presence changing do not satisfy the barrier. Failed wake,
+NEEDS_USER or startup expiry is surfaced; retries are zero and normal host
+deadlines/abort cleanup remain active. Existing manually launched Join callers
+continue without lifecycle configuration. See [lifecycle](AGENT_LIFECYCLE.md).
