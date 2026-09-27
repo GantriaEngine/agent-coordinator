@@ -44,5 +44,10 @@
       "Path": "worker/PktMonCapture.ps1",
       "SHA256": "86c04c42580fe0b5fab38dba5536986481e34e933ddfaef23f69bc082bdceab0"
     }
-  ]
+  ],
+  "Reconciliation": {
+    "Reason": "Source and tests advanced concurrently before adapter extraction; preserve verified late-FINALIZE behavior and keep capture-direction acceptance in Gargantuan.",
+    "WorkingQualifierSHA256": "fb55ffea8d803edb87268b3281dfb919ffd5a87b20d8519ca5517f4399766ba9",
+    "CurrentProjectTestsSHA256": "be39862e8bc7625a0cd14d85b8538eea002e793a9a97d061e4cca3e32fd30a0a"
+  }
 }
