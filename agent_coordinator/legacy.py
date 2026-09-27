@@ -148,10 +148,19 @@ def Endpoint(Config, ValidateConfig, LocalRun):
                     Run.Start()
                     State = "RUNNING"
                     Link.Send("CLIENT_RUNNING", Pid=Run.Probe.pid)
-                elif Role == "SERVER" and Live and Type == "FINALIZE" and not Done:
+                elif Role == "SERVER" and State == "RUNNING" and Live and Type == "FINALIZE" and not Done:
                     Run.FinalizeAt = time.monotonic() + 5
-                elif Type == "RUN_DONE" and Done:
+                    State = "FINALIZING"
+                    Log.Write("STATE", Value=State)
+                elif Role == "SERVER" and State == "RESULT_READY" and Done and Type == "FINALIZE":
+                    # The coordinator can send FINALIZE just before it receives an
+                    # already-sent SERVER_DONE. Accept this one delayed signal only
+                    # after the server result and cleanup are complete.
+                    State = "FINALIZING"
+                    Log.Write("STATE", Value=State, Detail="late FINALIZE after SERVER_DONE")
+                elif Type == "RUN_DONE" and Done and State in ("RESULT_READY", "FINALIZING"):
                     State = "COMPLETE"
+                    Log.Write("STATE", Value=State)
                 else:
                     raise ValueError("unexpected command " + Type + " in " + State)
             if Done:
@@ -174,6 +183,8 @@ def Endpoint(Config, ValidateConfig, LocalRun):
                     Result["Success"] = False
                     Result["CleanupErrors"] = Errors
                 Done = True
+                State = "RESULT_READY"
+                Log.Write("STATE", Value=State)
                 Link.Send(Role + "_DONE", **Result)
     except (Exception, KeyboardInterrupt) as Error:
         Result = {"Success": False, "Classification": "ABORT", "Detail": str(Error) or type(Error).__name__}
@@ -193,5 +204,4 @@ def Endpoint(Config, ValidateConfig, LocalRun):
             Sock.close()
         Log.Close(Result)
     return 0 if Result["Success"] else 1
-
 
