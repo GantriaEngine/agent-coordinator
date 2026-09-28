@@ -81,6 +81,17 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(Status["Success"])
         self.assertEqual("MISSING_CAPABILITY", Status["Escalation"]["Reason"])
 
+    def test_nonzero_codex_exit_rejects_local_idle_report(self):
+        Item = self.Adapter()
+        Item.Process = type("FailedProcess", (), {"poll": lambda self: 1, "returncode": 1})()
+        Item.Tree = type("ClosedTree", (), {"Close": lambda self: None})()
+        Item.Threads = []
+        Item.Completed = True
+        Item.ObserveFinal('{"Status":"IDLE","Reason":"NONE"}')
+        Status = Item.GetAgentStatus()
+        self.assertFalse(Status["ProcessSuccess"])
+        self.assertFalse(Status["Success"])
+
     def test_owned_process_tree_cleanup_including_parent_exit(self):
         Fixture = Path(__file__).parent / "fixtures/process_tree.py"
         for Exit in (False, True):

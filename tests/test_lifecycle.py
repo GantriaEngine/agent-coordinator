@@ -17,7 +17,7 @@ from agent_coordinator.lifecycle.presence import Presence, ValidateNotice
 from agent_coordinator.lifecycle.policy import Bootstrap, Policy
 from agent_coordinator.lifecycle.service import Client, Encode, Service
 from agent_coordinator.transport import Journal
-from agent_coordinator.workflow import Workflow
+from agent_coordinator.workflow import Catalog, Workflow
 
 ROOT = Path(__file__).parents[1]
 
@@ -215,6 +215,38 @@ class EndpointTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Other.InstallTicket(Ticket(self.Notice))
 
+    def test_duplicate_completion_does_not_replay_or_restart(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.Item.GetPresence()
+        self.Status("IDLE", 2)
+        self.Adapter.Active, self.Adapter.Success = False, True
+        First = self.Item.GetPresence()
+        self.Now += 0.5
+        Second = self.Item.GetPresence()
+        self.assertEqual("IDLE", Second["Status"])
+        self.assertEqual(First["Status"], Second["Status"])
+        self.assertEqual(1, self.Adapter.Starts)
+        self.Item.StartAgent(self.Notice)
+        self.assertEqual(1, self.Adapter.Starts)
+        self.Item.StopAgent(self.Notice["Generation"])
+        with self.assertRaises(ValueError):
+            self.Item.StartAgent(self.Notice)
+
+    def test_failed_bootstrap_cannot_become_idle_from_clean_codex_exit(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("FAILED", Reason="AGENT_FAILED")
+        self.Adapter.Active, self.Adapter.Success = False, True
+        self.assertEqual("FAILED", self.Item.GetPresence()["Status"])
+
+    def test_nonzero_codex_exit_cannot_complete_idle_bootstrap(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.Item.GetPresence()
+        self.Status("IDLE", 2)
+        self.Adapter.Active, self.Adapter.Success = False, False
+        self.assertEqual("FAILED", self.Item.GetPresence()["Status"])
+
     def test_needs_user_cannot_be_approved_by_wake(self):
         self.Item.StartAgent(self.Notice)
         self.Status("NEEDS_USER", Reason="UAC_APPROVAL")
@@ -330,6 +362,14 @@ class EndpointTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.Item.InstallTicket(Bad)
 
+    def test_missing_installed_capability_rejects_ticket_before_wake(self):
+        with patch("agent_coordinator.lifecycle.bootstrap.LoadCatalog",
+                   return_value=Catalog({}, lambda: None)):
+            with self.assertRaisesRegex(ValueError, "missing locally approved capability"):
+                self.Item.InstallTicket(Ticket(Notice()))
+        self.assertEqual([], self.Item.Used)
+        self.assertEqual(0, self.Adapter.Starts)
+
     def test_stale_status_and_oversize_file_fail_closed(self):
         self.Item.StartAgent(self.Notice)
         (self.Directory / "status.json").write_text("x" * 2049)
@@ -409,7 +449,7 @@ class ServiceTests(unittest.TestCase):
 
 
 class WakeIntegrationTests(unittest.TestCase):
-    def RunWorkflow(self, ExpectedWrongRun=False, ExpectedWrongRole=False):
+    def RunWorkflow(self, ExpectedWrongRun=False, ExpectedWrongRole=False, HoldExit=False):
         from agent_coordinator.lifecycle.synthetic import GetCatalog
         WorkflowItem = Workflow(json.loads((ROOT / "examples/readiness.json").read_text()))
         Notices = {Role: Notice(Role) for Role in ("SERVER", "CLIENT")}
@@ -428,6 +468,8 @@ class WakeIntegrationTests(unittest.TestCase):
             HostThread.start()
             self.assertTrue(Ready.wait(2))
             Items, Workers = {}, []
+            Completed = {Role: threading.Event() for Role in Tickets}
+            Release = threading.Event()
             for Role in Tickets:
                 Tickets[Role]["Config"]["Port"] = State["Port"]
                 class JoiningAdapter(FakeAdapter):
@@ -438,6 +480,12 @@ class WakeIntegrationTests(unittest.TestCase):
                                                GetCatalog(), Journal(Root / Role),
                                                ExpectedRunId=str(uuid.uuid4()) if ExpectedWrongRun else Run.RunId,
                                                ExpectedRole="CLIENT" if ExpectedWrongRole and Role == "SERVER" else Role)
+                            if HoldExit and Codes[Role] == 0:
+                                Atomic(Root / (Role + "-presence") / "status.json",
+                                       {"Generation": Notices[Role]["Generation"], "RunId": Run.RunId,
+                                        "Sequence": 1, "Status": "IDLE", "Reason": "NONE", "Detail": ""})
+                                Completed[Role].set()
+                                Release.wait(7)
                             Adapter.Active, Adapter.Success = False, Codes[Role] == 0
                         Thread = threading.Thread(target=Worker)
                         Workers.append(Thread)
@@ -448,15 +496,34 @@ class WakeIntegrationTests(unittest.TestCase):
                 Items[Role].StartAgent(Notices[Role])
                 Items[Role].StartAgent(Notices[Role])
                 self.assertEqual(1, Items[Role].Adapter.Starts)
+            if HoldExit:
+                HostThread.join(7)
+                self.assertFalse(HostThread.is_alive())
+                self.assertEqual(0, Codes["Host"])
+                try:
+                    for Role in Tickets:
+                        self.assertTrue(Completed[Role].wait(2))
+                    time.sleep(0.3)  # endpoint supervision samples at 250 ms
+                    for Role in Tickets:
+                        self.assertEqual("RUNNING", Items[Role].GetPresence()["Status"])
+                finally:
+                    Release.set()
             for Thread in [*Workers, HostThread]:
                 Thread.join(7)
                 self.assertFalse(Thread.is_alive())
             self.assertEqual(1 if ExpectedWrongRun or ExpectedWrongRole else 0, Codes["Host"])
             if not ExpectedWrongRun and not ExpectedWrongRole:
                 self.assertEqual({"Host": 0, "SERVER": 0, "CLIENT": 0}, Codes)
+            if HoldExit:
+                time.sleep(0.3)
+                for Role in Tickets:
+                    self.assertEqual("IDLE", Items[Role].GetPresence()["Status"])
 
     def test_offline_wake_fresh_pull_registration_barrier_results_cleanup(self):
         self.RunWorkflow()
+
+    def test_host_success_waits_for_delayed_clean_agent_exit(self):
+        self.RunWorkflow(HoldExit=True)
 
     def test_delayed_agent_cannot_accept_replacement_run(self):
         self.RunWorkflow(ExpectedWrongRun=True)
