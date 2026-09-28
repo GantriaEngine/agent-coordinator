@@ -147,14 +147,6 @@ class Endpoint:
         if Agent["AgentId"] is not None:
             self.Presence.AgentId = Agent["AgentId"]
         Escalation = Agent.get("Escalation")
-        if Escalation is not None:
-            Exact(Escalation, ("Status", "Reason"))
-            if Escalation["Status"] != "NEEDS_USER":
-                raise ValueError("invalid adapter escalation")
-            if self.Presence.Status != "NEEDS_USER":
-                self.Set("NEEDS_USER", Escalation["Reason"])
-            self.Adapter.StopAgent()
-            return
         File = self.Directory / "status.json"
         if File.exists():
             if File.stat().st_size > 2048:
@@ -177,6 +169,25 @@ class Endpoint:
                 # Local bootstrap writes this only after typed REGISTERED acknowledgement.
                 if Row["Status"] in ("WAITING_FOR_PEER", "RUNNING", "IDLE"):
                     self.Registered = True
+        if Escalation is not None:
+            Exact(Escalation, ("Status", "Reason"))
+            if Escalation["Status"] != "NEEDS_USER":
+                raise ValueError("invalid adapter escalation")
+            # A completed bootstrap has already validated and used the installed
+            # capabilities. Model output can misread a yielded tool session.
+            if (Escalation["Reason"] == "MISSING_CAPABILITY" and self.Registered and
+                    self.BridgeState in ("WAITING_FOR_PEER", "RUNNING", "IDLE")):
+                if Agent["Active"]:
+                    self.Presence.Expires = self.Clock() + self.Presence.Lease
+                    return
+                if Agent.get("ProcessSuccess") is True and self.BridgeState == "IDLE":
+                    if self.Presence.Status != "IDLE":
+                        self.Set("IDLE")
+                    return
+            if self.Presence.Status != "NEEDS_USER":
+                self.Set("NEEDS_USER", Escalation["Reason"])
+            self.Adapter.StopAgent()
+            return
         if not self.Registered and Agent["Active"] and self.Clock() - self.Started >= self.StartupSeconds:
             self.Adapter.StopAgent()
             self.Set("FAILED", "STARTUP_TIMEOUT")

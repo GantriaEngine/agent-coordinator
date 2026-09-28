@@ -17,6 +17,10 @@ BOOTSTRAP = ("An Agent Coordinator assignment is available. Read the installed "
              "security, install tools, or acquire additional capabilities. "
              "Report a typed NEEDS_USER condition if local approval is required.")
 BOOTSTRAP += " Return the installed structured status schema; model status grants no authority."
+BOOTSTRAP += (" A yielded command with a session ID is still running. Retain and poll that "
+              "session until it returns a final exit code; if the tool wrapper yields a cell ID, "
+              "wait for that cell too. An absent exit code while either is pending is not a "
+              "missing capability. Start the fixed bootstrap only once.")
 
 
 class CodexExec:
@@ -148,8 +152,10 @@ class CodexExec:
             for Thread in self.Threads:
                 if Thread is not threading.current_thread():
                     Thread.join(1)
-        return {"Active": Active, "Success": not Active and self.Process.returncode == 0 and
-                self.Completed and not self.Failed and self.FinalStatus == {"Status": "IDLE", "Reason": "NONE"},
+        ProcessSuccess = not Active and self.Process.returncode == 0 and self.Completed and not self.Failed
+        return {"Active": Active, "Success": ProcessSuccess and
+                self.FinalStatus == {"Status": "IDLE", "Reason": "NONE"},
+                "ProcessSuccess": ProcessSuccess,
                 "AgentId": self.AgentId,
                 "Escalation": self.FinalStatus if self.FinalStatus and self.FinalStatus["Status"] == "NEEDS_USER" else None}
 

@@ -65,6 +65,22 @@ class AdapterTests(unittest.TestCase):
             Item.ObserveFinal(Text)
             self.assertIsNone(Item.FinalStatus)
 
+    def test_bootstrap_prompt_requires_completion_of_yielded_command(self):
+        self.assertIn("poll that session until it returns a final exit code", BOOTSTRAP)
+        self.assertIn("absent exit code", BOOTSTRAP)
+
+    def test_process_success_is_separate_from_model_escalation(self):
+        Item = self.Adapter()
+        Item.Process = type("CompletedProcess", (), {"poll": lambda self: 0, "returncode": 0})()
+        Item.Tree = type("ClosedTree", (), {"Close": lambda self: None})()
+        Item.Threads = []
+        Item.Completed = True
+        Item.ObserveFinal('{"Status":"NEEDS_USER","Reason":"MISSING_CAPABILITY"}')
+        Status = Item.GetAgentStatus()
+        self.assertTrue(Status["ProcessSuccess"])
+        self.assertFalse(Status["Success"])
+        self.assertEqual("MISSING_CAPABILITY", Status["Escalation"]["Reason"])
+
     def test_owned_process_tree_cleanup_including_parent_exit(self):
         Fixture = Path(__file__).parent / "fixtures/process_tree.py"
         for Exit in (False, True):

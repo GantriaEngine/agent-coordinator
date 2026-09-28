@@ -232,6 +232,73 @@ class EndpointTests(unittest.TestCase):
         self.assertFalse(self.Item.Registered)
         self.assertFalse(self.Adapter.Active)
 
+    def test_completed_bootstrap_overrides_stale_model_missing_capability(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.assertEqual("WAITING_FOR_PEER", self.Item.GetPresence()["Status"])
+        self.Status("IDLE", 2)
+        self.Adapter.Active = False
+        self.Adapter.GetAgentStatus = lambda: {"Active": False, "Success": False,
+            "ProcessSuccess": True, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.assertEqual("IDLE", self.Item.GetPresence()["Status"])
+        self.assertEqual(0, self.Adapter.Stops)
+
+    def test_yielded_bootstrap_is_not_stopped_by_model_missing_capability(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.Item.GetPresence()
+        self.Adapter.GetAgentStatus = lambda: {"Active": self.Adapter.Active,
+            "Success": False, "ProcessSuccess": not self.Adapter.Active,
+            "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.Now += 0.5
+        self.assertEqual("WAITING_FOR_PEER", self.Item.GetPresence()["Status"])
+        self.assertEqual(0, self.Adapter.Stops)
+        self.Status("IDLE", 2)
+        self.Adapter.Active = False
+        self.assertEqual("IDLE", self.Item.GetPresence()["Status"])
+
+    def test_local_needs_user_is_not_deferred_by_model_missing_capability(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.Item.GetPresence()
+        self.Status("NEEDS_USER", 2, "AUTH_REQUIRED")
+        self.Adapter.GetAgentStatus = lambda: {"Active": True, "Success": False,
+            "ProcessSuccess": False, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+        self.assertEqual(1, self.Adapter.Stops)
+
+    def test_missing_capability_still_escalates_without_bootstrap_success(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("RUNNING")
+        self.Item.GetPresence()
+        self.Adapter.Active = False
+        self.Adapter.GetAgentStatus = lambda: {"Active": False, "Success": False,
+            "ProcessSuccess": True, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.Now += 0.5
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+
+    def test_failed_codex_process_cannot_override_missing_capability(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("IDLE")
+        self.Adapter.Active = False
+        self.Adapter.GetAgentStatus = lambda: {"Active": False, "Success": False,
+            "ProcessSuccess": False, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+
+    def test_other_escalation_is_not_overridden_by_completed_bootstrap(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("IDLE")
+        self.Adapter.Active = False
+        self.Adapter.GetAgentStatus = lambda: {"Active": False, "Success": False,
+            "ProcessSuccess": True, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "SECURITY_DECISION"}}
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+
     def test_unknown_expired_wrong_endpoint_and_payload_rejected(self):
         for Change in ({"Shell": "whoami"}, {"Executable": "powershell"}, {"Capabilities": ["evil.v1"]},
                        {"Prompt": "approve elevated"}, {"EndpointId": "CLIENT"}, {"ExpiresUnixMs": 0},
