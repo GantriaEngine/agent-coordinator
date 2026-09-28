@@ -109,6 +109,43 @@ class ExtractedProtocolTests(unittest.TestCase):
         self.Read(Server, "RUN_DONE")
         self.Finish(1)
 
+    def test_explicit_four_client_classification_requires_both_endpoint_reports(self):
+        self.Config["ResultClassification"] = "FOUR_CLIENT_READINESS_ONLY"
+        self.Start()
+        Client, Server = self.Peer("CLIENT"), self.Peer("SERVER")
+        self.Read(Client, "ARM_CAPTURE")
+        Client.Send("CAPTURE_LIVE")
+        self.Read(Server, "START_SERVER")
+        Server.Send("SERVER_LIVE", Pid=123, Endpoint=self.Config["Endpoint"])
+        self.Read(Client, "START_CLIENT")
+        Client.Send("CLIENT_DONE", Success=True, Classification="FOUR_CLIENT_READINESS_ONLY")
+        self.Read(Server, "FINALIZE")
+        Server.Send("SERVER_DONE", Success=True, Classification="FOUR_CLIENT_READINESS_ONLY")
+        self.assertTrue(self.Read(Client, "RUN_DONE")["Success"])
+        self.assertTrue(self.Read(Server, "RUN_DONE")["Success"])
+        self.Finish(0)
+        Result = json.loads((self.Root / "coordinator" / "result.json").read_text())
+        self.assertEqual("FOUR_CLIENT_READINESS_ONLY", Result["Classification"])
+
+    def test_explicit_result_classification_mismatch_fails_closed(self):
+        self.Config["ResultClassification"] = "FOUR_CLIENT_READINESS_ONLY"
+        self.Start()
+        Client, Server = self.Peer("CLIENT"), self.Peer("SERVER")
+        self.Read(Client, "ARM_CAPTURE")
+        Client.Send("CAPTURE_LIVE")
+        self.Read(Server, "START_SERVER")
+        Server.Send("SERVER_LIVE", Pid=123, Endpoint=self.Config["Endpoint"])
+        self.Read(Client, "START_CLIENT")
+        Client.Send("CLIENT_DONE", Success=True, Classification="FOUR_CLIENT_READINESS_ONLY")
+        self.Read(Server, "FINALIZE")
+        Server.Send("SERVER_DONE", Success=True, Classification="ONE_CLIENT_READINESS_ONLY")
+        self.assertFalse(self.Read(Client, "RUN_DONE")["Success"])
+        self.assertFalse(self.Read(Server, "RUN_DONE")["Success"])
+        self.Finish(1)
+        Result = json.loads((self.Root / "coordinator" / "result.json").read_text())
+        self.assertEqual("FOUR_CLIENT_READINESS_ONLY", Result["Classification"])
+        self.assertEqual("endpoint result classification mismatch", Result["Detail"])
+
     def test_server_finishes_before_client(self):
         self.Start()
         Client, Server = self.Peer("CLIENT"), self.Peer("SERVER")
