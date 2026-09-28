@@ -224,7 +224,7 @@ def Host(HostIp, Port, AssignmentsItem, Journal, Listening=None):
     return 0 if Success else 1
 
 
-def Join(Config, ApprovedWorkflows, CatalogItem, Journal):
+def Join(Config, ApprovedWorkflows, CatalogItem, Journal, ExpectedRunId=None, Observe=None, ExpectedRole=None):
     Exact(Config, ("EndpointId", "PeerIp", "CoordinatorHost", "Port", "RunId", "Token"))
     Address(Config["PeerIp"])
     Address(Config["CoordinatorHost"])
@@ -243,6 +243,8 @@ def Join(Config, ApprovedWorkflows, CatalogItem, Journal):
         Assignment = Response["Assignment"]
         Exact(Assignment, ("RunId", "Token", "Role", "SchemaId", "SchemaVersion", "SchemaHash", "Parameters", "ExpiresUnixMs"))
         Identity(Assignment)
+        if ExpectedRunId is not None and Assignment["RunId"] != ExpectedRunId:
+            raise ValueError("lifecycle run mismatch")
         if type(Assignment["SchemaVersion"]) is not int:
             raise ValueError("unsupported schema version")
         if type(Assignment["ExpiresUnixMs"]) is not int or time.time_ns() // 1000000 >= Assignment["ExpiresUnixMs"]:
@@ -252,6 +254,8 @@ def Join(Config, ApprovedWorkflows, CatalogItem, Journal):
             raise ValueError("local workflow hash mismatch")
         Parameters = Workflow.Parameters(Assignment["Parameters"])
         Role = Assignment["Role"]
+        if ExpectedRole is not None and Role != ExpectedRole:
+            raise ValueError("lifecycle role mismatch")
         Advertised = CatalogItem.Advertise(Workflow, Role)
         Item.Config = Assignment
         Item.Send("REGISTER", Role=Role, SchemaId=Assignment["SchemaId"], SchemaVersion=Assignment["SchemaVersion"],
@@ -261,6 +265,8 @@ def Join(Config, ApprovedWorkflows, CatalogItem, Journal):
         Response = Await(Item, RegistrationDeadline)
         if Response["Type"] != "REGISTERED" or Response["Role"] != Role:
             raise ValueError("invalid registration acknowledgement")
+        if Observe:
+            Observe("WAITING_FOR_PEER")
         Item.Send("STAGED", Role=Role)
         Armed = Await(Item, RegistrationDeadline)
         if Armed["Type"] != "ARMED" or Armed["ExecutionTimeout"] != Workflow.Value["ExecutionTimeout"]:
@@ -291,6 +297,8 @@ def Join(Config, ApprovedWorkflows, CatalogItem, Journal):
             if ExecutionDeadline is None:
                 ExecutionDeadline = time.monotonic() + Workflow.Value["ExecutionTimeout"]
             Deadline = min(ExecutionDeadline, time.monotonic() + Step["Timeout"])
+            if Observe:
+                Observe("RUNNING")
             Result = CatalogItem.Invoke(Row["Capability"], Advertised, Row["Parameters"], Deadline)
             Item.Send(Step["Response"], Index=Row["Index"], Role=Role, **Result)
             LastIndex = Row["Index"]

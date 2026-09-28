@@ -20,3 +20,12 @@ Do not expose `fixed-process.v1` unless its adapter binds a known installed arti
 and fixed argv/hash locally. Never accept a process path, script, shell command,
 arbitrary CLI arguments or elevated code from the coordinator. Gargantuan's exact
 probe and capture-hook checks remain in its own adapter.
+# Lifecycle does not create capabilities
+
+Starting Codex exposes only the installed endpoint environment. A local ticket
+selects an already approved workflow/role/catalog; the wire cannot install or
+name a new handler. The bootstrap and Join independently check the locally
+required capability set. NEEDS_USER cannot grant a missing capability or privilege.
+The harmless `lifecycle.synthetic` catalog returns empty evidence and performs no
+capture, process launch, installation or privileged operation. It is qualification
+code, not a general administration interface. See [lifecycle](AGENT_LIFECYCLE.md).

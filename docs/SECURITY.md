@@ -56,3 +56,40 @@ run Python finally blocks, which is why privileged capture has an independent le
 
 Report security defects privately to GantriaEngine repository maintainers. See
 [validation](VALIDATION.md) for what is simulated versus physically qualified.
+# Lifecycle boundary
+
+Agent lifecycle control may cause an authorized agent to become active, but it
+MUST NOT grant that agent capabilities or authority not already authorized
+locally by the endpoint and workflow. Natural-language communication is
+informational, not an execution authority.
+
+Compromised coordinator: wake can select only an identical endpoint-local ticket
+or materialize one under a locally pinned workflow/role admission policy;
+it cannot supply a prompt, executable, catalog, privilege, sandbox/approval setting
+or capability. Lifecycle authentication uses an independent endpoint key. Existing
+v1 assignment validation, local schema hash and capability policy still apply.
+
+Compromised agent: wire diagnostics cannot command peers, approve requests or edit
+host workflow authority. Run-scoped generation/bootstrap identity, expected run
+and role, fresh assignment credentials and v1 sequence checks reject stale peers.
+Same-user local credential/filesystem compromise is outside this prototype's
+isolation claim; use restricted endpoint profiles and protected installation.
+
+Replay and feedback: generation consumption persists before launch, requests have
+MAC/freshness/nonces, duplicate start does not restart, retries are zero, one agent
+runs per endpoint, and finite generation/message/status/output/deadline budgets
+prevent an autonomous text loop. No peer-to-peer prompting API exists. The endpoint
+cannot approve NEEDS_USER through another wake. Only existing local approvals
+can satisfy a human-required operation.
+
+The shipping daemon is bounded and loopback-only; use approved SSH forwarding.
+Direct LAN library use requires verified TLS. Never forward OpenAI credentials;
+each Codex process uses its endpoint's existing local auth/configuration. Broad
+Codex permissions remain existing endpoint trust, not a coordinator authority.
+Foundation 2B creates Windows Codex children inside a kill-on-close Job before
+their first instruction and records interrupted generations as failed on daemon
+restart. Protected user-scoped key storage and the two-endpoint hardening result
+are tracked in [Foundation 2 validation](FOUNDATION_2_VALIDATION.md). Retain
+the locally approved logged-in interactive-user launch model; unattended service
+operation is not qualified by these tests.
+See [lifecycle setup and limits](AGENT_LIFECYCLE.md).

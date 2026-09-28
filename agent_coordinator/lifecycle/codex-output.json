@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Status": {"type": "string", "enum": ["IDLE", "NEEDS_USER"]},
+    "Reason": {"type": "string", "enum": ["NONE", "UAC_APPROVAL", "PHYSICAL_INTERVENTION", "SECURITY_DECISION", "MISSING_CAPABILITY", "AUTH_REQUIRED"]}
+  },
+  "required": ["Status", "Reason"]
+}
