@@ -3,6 +3,11 @@ from .transport import *
 
 def Coordinator(Config, ValidateConfig):
     ValidateConfig(Config)
+    ExpectedClassification = Config.get("ResultClassification", "ONE_CLIENT_READINESS_ONLY")
+    if (not isinstance(ExpectedClassification, str) or
+            not 1 <= len(ExpectedClassification) <= 64 or
+            any(Letter not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for Letter in ExpectedClassification)):
+        raise ValueError("invalid local result classification")
     Log = Journal(Config["EvidenceDir"])
     Listener = socket.socket()
     Selector = selectors.DefaultSelector()
@@ -79,8 +84,14 @@ def Coordinator(Config, ValidateConfig):
                     if Role == "CLIENT" and "SERVER" not in Done:
                         Peers["SERVER"].Send("FINALIZE")
                     if len(Done) == 2:
-                        Result = {"Success": all(Value.get("Success") is True for Value in Done.values()),
-                                  "Classification": "ONE_CLIENT_READINESS_ONLY", "Endpoints": Done}
+                        ClassesMatch = ("ResultClassification" not in Config or
+                                        all(Value.get("Classification") == ExpectedClassification
+                                            for Value in Done.values()))
+                        Result = {"Success": (ClassesMatch and
+                                              all(Value.get("Success") is True for Value in Done.values())),
+                                  "Classification": ExpectedClassification, "Endpoints": Done}
+                        if not ClassesMatch:
+                            Result["Detail"] = "endpoint result classification mismatch"
                         for Peer in Peers.values():
                             Peer.Send("RUN_DONE", Success=Result["Success"])
                         State = "COMPLETE"

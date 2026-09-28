@@ -13,6 +13,14 @@ independent. Legacy readiness v1 retains its established messages and transition
 checks; it is not wire-compatible with the schema-control profile. Both use
 transport v1. Consumer selects a profile locally, never by an agent message.
 
+For the legacy readiness profile, a trusted local coordinator config may set
+`ResultClassification` to an uppercase identifier of at most 64 characters.
+With this key present, both endpoint `*_DONE` reports must carry that exact
+classification. A mismatch produces `RUN_DONE Success=false` and a failed
+top-level result under the configured classification. Without the key, the
+historical `ONE_CLIENT_READINESS_ONLY` label and success behavior are preserved.
+This is result reconciliation, not a wire capability or acceptance gate.
+
 ## Schema-control v1
 
 The machine-readable [envelope schema](../agent_coordinator/schemas/envelope.json)

@@ -35,8 +35,10 @@ The helper tests use a harmless locally installed mock hook and exercise the rea
   manifest and hash generation. Transport version 1 is unchanged.
 - `agent_coordinator.legacy`: existing CLIENT/SERVER readiness barrier and endpoint
   lifecycle. Local validator and probe/capture adapter are mandatory arguments.
-  Its historical readiness result classification remains compatibility metadata;
-  it is not a policy or acceptance decision owned by this project.
+  Its historical one-client result classification remains the default. A locally
+  configured `ResultClassification` labels the top-level result only when both
+  endpoint reports agree with it; disagreement makes the run unsuccessful. The
+  classification remains compatibility metadata, not an acceptance decision.
 - `agent_coordinator.workflow`: strict schema, role transitions, numeric parameter
   bounds, versioned symbolic capabilities, locally installed callable catalog.
 - `agent_coordinator.control`: authenticated assignment pull, registration,
