@@ -27,7 +27,8 @@ dotnet run --project tests/helper/HelperTests.csproj -c Release
 The simulation runs two local helpers and a host, using fresh tokens and a tiny
 non-Gargantuan [workflow](examples/readiness.json). It starts no capture/probe.
 The helper tests use a harmless locally installed mock hook and exercise the real
-90-second duration limit; they do not install a service or change NIC policy.
+90-second capture duration limit and a 16-second export within the fixed 30-second
+hook deadline; they do not install a service or change NIC policy.
 
 ## Architecture and usage
 

@@ -68,7 +68,7 @@ internal sealed class CaptureService : ServiceBase
     private const string PipeName = "GantriaAgentCoordinatorCapture-v1";
     private const int MaximumRequestBytes = 16384;
     private static readonly TimeSpan CaptureLimit = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(30);
     private readonly string BaseDirectory;
     private readonly CancellationTokenSource StopSource = new();
     private readonly SemaphoreSlim StateLock = new(1, 1);
@@ -395,7 +395,7 @@ internal sealed class CaptureService : ServiceBase
         if (!Child.WaitForExit((int)HookLimit.TotalMilliseconds))
         {
             try { Child.Kill(true); } catch { }
-            throw new System.TimeoutException("capture hook exceeded its 15 second deadline");
+            throw new System.TimeoutException($"capture hook exceeded its {HookLimit.TotalSeconds:0} second deadline");
         }
         Task.WaitAll(OutputTask, ErrorTask);
         OutputText = OutputTask.Result;
