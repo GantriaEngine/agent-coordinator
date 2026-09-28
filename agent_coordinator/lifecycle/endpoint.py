@@ -176,6 +176,7 @@ class Endpoint:
             # A completed bootstrap has already validated and used the installed
             # capabilities. Model output can misread a yielded tool session.
             if (Escalation["Reason"] == "MISSING_CAPABILITY" and self.Registered and
+                    self.Presence.Status not in ("FAILED", "NEEDS_USER") and
                     self.BridgeState in ("WAITING_FOR_PEER", "RUNNING", "IDLE")):
                 if Agent["Active"]:
                     self.Presence.Expires = self.Clock() + self.Presence.Lease

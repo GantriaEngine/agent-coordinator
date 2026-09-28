@@ -270,6 +270,18 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
         self.assertEqual(1, self.Adapter.Stops)
 
+    def test_existing_failure_is_not_deferred_by_model_missing_capability(self):
+        self.Item.StartAgent(self.Notice)
+        self.Status("WAITING_FOR_PEER")
+        self.Item.GetPresence()
+        self.Item.Set("FAILED", "AGENT_FAILED")
+        self.Adapter.GetAgentStatus = lambda: {"Active": True, "Success": False,
+            "ProcessSuccess": False, "AgentId": self.Adapter.AgentId,
+            "Escalation": {"Status": "NEEDS_USER", "Reason": "MISSING_CAPABILITY"}}
+        self.Now += 0.5
+        self.assertEqual("NEEDS_USER", self.Item.GetPresence()["Status"])
+        self.assertEqual(1, self.Adapter.Stops)
+
     def test_missing_capability_still_escalates_without_bootstrap_success(self):
         self.Item.StartAgent(self.Notice)
         self.Status("RUNNING")
