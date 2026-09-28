@@ -28,7 +28,10 @@ internal static class HelperTests
             var Evidence = Path.Combine(EvidenceRoot, "run");
             Directory.CreateDirectory(Evidence);
             var Hook = Path.Combine(Root, "capture-mock.ps1");
-            File.WriteAllText(Hook, "param([string]$EvidenceDir,[string]$Action)\nSet-Content -LiteralPath (Join-Path $EvidenceDir 'operation.txt') -Value $Action\n");
+            const string HookText = "param([string]$EvidenceDir,[string]$Action)\n" +
+                "if ($Action -eq 'Stop' -and (Test-Path -LiteralPath (Join-Path $EvidenceDir 'slow-stop.txt'))) { Start-Sleep -Seconds 16 }\n" +
+                "Set-Content -LiteralPath (Join-Path $EvidenceDir 'operation.txt') -Value $Action\n";
+            File.WriteAllText(Hook, HookText);
             var Hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Hook)));
             var Sid = WindowsIdentity.GetCurrent().User!.Value;
             var Image = Environment.ProcessPath!;
@@ -45,13 +48,23 @@ internal static class HelperTests
             Assert(!(await Request("start", Path.Combine(EvidenceRoot, "..", "outside"))).Success, "traversal accepted");
             File.AppendAllText(Hook, "# changed");
             Assert(!(await Request("start")).Success, "wrong hook hash accepted");
-            File.WriteAllText(Hook, "param([string]$EvidenceDir,[string]$Action)\nSet-Content -LiteralPath (Join-Path $EvidenceDir 'operation.txt') -Value $Action\n");
+            File.WriteAllText(Hook, HookText);
             Assert((await Request("stop")).Success, "hash-denied owned state reconciliation failed");
             Assert((await Request("start")).Success, "authorized capture start failed");
             Assert((await Request("status")).State == "running", "active status failed");
             Assert(!(await Request("start")).Success, "double start accepted");
             Assert((await Request("stop")).Success, "authorized stop failed");
             Assert(File.ReadAllText(Path.Combine(Evidence, "operation.txt")).Trim() == "Stop", "stop hook not invoked");
+            File.WriteAllText(Path.Combine(Evidence, "slow-stop.txt"), "bounded export simulation");
+            Assert((await Request("start")).Success, "slow export start failed");
+            var SlowStop = Stopwatch.StartNew();
+            var SlowResponse = await Request("stop");
+            SlowStop.Stop();
+            Assert(SlowResponse.Success && SlowResponse.State == "stopped", "slow owned export did not acknowledge completion");
+            Assert(SlowStop.Elapsed >= TimeSpan.FromSeconds(16) && SlowStop.Elapsed < TimeSpan.FromSeconds(30),
+                "slow owned export exceeded the service bound");
+            Assert((await Request("status")).State == "idle", "slow owned export left capture active");
+            File.Delete(Path.Combine(Evidence, "slow-stop.txt"));
             using var Lease = Process.Start(new ProcessStartInfo(Image, "--lease") { UseShellExecute = false, CreateNoWindow = true })!;
             try
             {
@@ -71,6 +84,8 @@ internal static class HelperTests
             Assert((await Request("status")).State == "idle", "service stop cleanup failed");
             var Limit = (TimeSpan)typeof(CaptureService).GetField("CaptureLimit", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             Assert(Limit == TimeSpan.FromSeconds(90), "hard duration bound changed");
+            var HookLimit = (TimeSpan)typeof(CaptureService).GetField("HookLimit", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            Assert(HookLimit == TimeSpan.FromSeconds(30), "bounded hook deadline changed");
             // OS-level denial: current user is deliberately excluded from this test pipe.
             var Security = new PipeSecurity();
             Security.SetAccessRuleProtection(true, false);
