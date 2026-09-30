@@ -1,6 +1,80 @@
 """Compatibility v1 barrier; local validation and execution belong to adapters."""
 from .transport import *
 
+
+CONTROL_PREFLIGHT_CLASSIFICATION = "CONTROL_PREFLIGHT_ONLY"
+
+
+def Listen(Config, Log, Selector):
+    """Open the real legacy control listener before publishing readiness."""
+    Listener = socket.socket()
+    try:
+        Listener.bind((Config["CoordinatorHost"], Config["Port"]))
+        Listener.listen(2)
+        Listener.setblocking(False)
+        Selector.register(Listener, selectors.EVENT_READ)
+        BoundHost, BoundPort = Listener.getsockname()[:2]
+        Log.Write("LISTENING", Host=BoundHost, Port=BoundPort,
+                  RunId=Config["RunId"], Pid=os.getpid(), ParentPid=os.getppid())
+        Log.Write("LISTENER_READY", Host=BoundHost, Port=BoundPort,
+                  RunId=Config["RunId"], Pid=os.getpid(), ParentPid=os.getppid())
+        return Listener
+    except BaseException:
+        Listener.close()
+        raise
+
+
+def ConnectEndpoint(Config, Log):
+    """The one source-bind, connect and authenticated STAGE_READY path."""
+    Role = Config["Role"]
+    Sock = socket.socket()
+    Log.Write("ENDPOINT_CONTEXT", Role=Role, Pid=os.getpid(), ParentPid=os.getppid(),
+              Executable=sys.executable, Cwd=os.getcwd())
+    try:
+        try:
+            Sock.bind((Config["PeerIps"][Role], 0))
+        except OSError as Error:
+            Log.Write("BIND_FAILED", Role=Role, Source=Config["PeerIps"][Role],
+                      Errno=Error.errno, WinError=getattr(Error, "winerror", None),
+                      Detail=str(Error)[:512])
+            raise
+        Source = Sock.getsockname()[:2]
+        Target = (Config["CoordinatorHost"], Config["Port"])
+        Sock.settimeout(3)
+        Started = time.monotonic_ns()
+        Log.Write("CONNECT_START", Role=Role, Source=Source, Target=Target)
+        try:
+            # Coordinator starts first. A reconnect could replay registration.
+            Sock.connect(Target)
+        except OSError as Error:
+            Log.Write("CONNECT_FAILED", Role=Role, Source=Source, Target=Target,
+                      ElapsedUs=(time.monotonic_ns() - Started) // 1000,
+                      Errno=Error.errno, WinError=getattr(Error, "winerror", None),
+                      Detail=str(Error)[:512])
+            raise
+        Log.Write("CONNECT_OK", Role=Role, Source=Sock.getsockname()[:2],
+                  Target=Sock.getpeername()[:2],
+                  ElapsedUs=(time.monotonic_ns() - Started) // 1000)
+        Link = Channel(Sock, Config, Log)
+        Link.Send("STAGE_READY", Role=Role, ArtifactSHA256=Config["ArtifactSHA256"],
+                  Endpoint=Config["Endpoint"])
+        return Link
+    except BaseException:
+        Sock.close()
+        raise
+
+
+def RegisterStage(Item, Row, Config, Peers):
+    Role = Row.get("Role")
+    if (Row.get("Type") != "STAGE_READY" or Role not in ("CLIENT", "SERVER") or
+            Role in Peers or Item.PeerIp != Config["PeerIps"][Role] or
+            Row.get("ArtifactSHA256") != Config["ArtifactSHA256"] or
+            Row.get("Endpoint") != Config["Endpoint"]):
+        raise ValueError("invalid role, artifact, endpoint, or registration")
+    Item.Role = Role
+    Peers[Role] = Item
+
+
 def Coordinator(Config, ValidateConfig):
     ValidateConfig(Config)
     ExpectedClassification = Config.get("ResultClassification", "ONE_CLIENT_READINESS_ONLY")
@@ -9,7 +83,7 @@ def Coordinator(Config, ValidateConfig):
             any(Letter not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for Letter in ExpectedClassification)):
         raise ValueError("invalid local result classification")
     Log = Journal(Config["EvidenceDir"])
-    Listener = socket.socket()
+    Listener = None
     Selector = selectors.DefaultSelector()
     Peers = {}
     Accepted = []
@@ -17,12 +91,8 @@ def Coordinator(Config, ValidateConfig):
     Done = {}
     Result = {"Success": False, "Classification": "ABORT"}
     try:
-        Listener.bind((Config["CoordinatorHost"], Config["Port"]))
-        Listener.listen(2)
-        Listener.setblocking(False)
-        Selector.register(Listener, selectors.EVENT_READ)
+        Listener = Listen(Config, Log, Selector)
         Deadline = time.monotonic() + Config["StageTimeout"]
-        Log.Write("LISTENING", Host=Config["CoordinatorHost"], Port=Config["Port"], RunId=Config["RunId"])
         print("[Qualification:Coordinator] Waiting for staged local helpers", flush=True)
         while State != "COMPLETE":
             if time.monotonic() >= Deadline:
@@ -51,14 +121,7 @@ def Coordinator(Config, ValidateConfig):
                 if Type in ("ABORT", "FAILED"):
                     raise RuntimeError(Row.get("Detail", "endpoint failed"))
                 if Item.Role is None:
-                    Role = Row.get("Role")
-                    if (Type != "STAGE_READY" or Role not in ("CLIENT", "SERVER") or
-                            Role in Peers or Item.PeerIp != Config["PeerIps"][Role] or
-                            Row.get("ArtifactSHA256") != Config["ArtifactSHA256"] or
-                            Row.get("Endpoint") != Config["Endpoint"]):
-                        raise ValueError("invalid role, artifact, endpoint, or registration")
-                    Item.Role = Role
-                    Peers[Role] = Item
+                    RegisterStage(Item, Row, Config, Peers)
                     if len(Peers) == 2:
                         State = "ARMING"
                         Deadline = time.monotonic() + Config["RunTimeout"]
@@ -108,7 +171,8 @@ def Coordinator(Config, ValidateConfig):
         for Item in Accepted:
             Item.Socket.close()
         Selector.close()
-        Listener.close()
+        if Listener:
+            Listener.close()
         # Tokens are not retained in result evidence.
         for Value in Result.get("Endpoints", {}).values():
             Value.pop("Token", None)
@@ -124,19 +188,12 @@ def Endpoint(Config, ValidateConfig, LocalRun):
     Log = Journal(Config["EvidenceDir"])
     Run = LocalRun(Config, Log)
     Link = None
-    Sock = None
     Result = {"Success": False, "Classification": "ABORT"}
     State = "STAGED"
     Live = Done = False
     try:
         Run.Check()
-        Sock = socket.socket()
-        Sock.bind((Config["PeerIps"][Role], 0))
-        Sock.settimeout(3)
-        # Coordinator starts first. No reconnect can replay a run after registration.
-        Sock.connect((Config["CoordinatorHost"], Config["Port"]))
-        Link = Channel(Sock, Config, Log)
-        Link.Send("STAGE_READY", Role=Role, ArtifactSHA256=Config["ArtifactSHA256"], Endpoint=Config["Endpoint"])
+        Link = ConnectEndpoint(Config, Log)
         print(f"[Qualification:{Role}] Staged; waiting on the LAN barrier", flush=True)
         Deadline = time.monotonic() + Config["StageTimeout"] + Config["RunTimeout"]
         while State != "COMPLETE":
@@ -211,8 +268,152 @@ def Endpoint(Config, ValidateConfig, LocalRun):
                 Result["CleanupErrors"] = Errors
         if Link:
             Link.Socket.close()
-        elif Sock:
-            Sock.close()
+        Log.Close(Result)
+    return 0 if Result["Success"] else 1
+
+
+def ControlPreflightCoordinator(Config, ValidateConfig):
+    """Locally selected two-role registration proof; no probe/capture states."""
+    ValidateConfig(Config)
+    Log = Journal(Config["EvidenceDir"])
+    Listener = None
+    Selector = selectors.DefaultSelector()
+    Accepted = []
+    Peers = {}
+    Done = set()
+    State = "STAGING"
+    Result = {"Success": False, "Classification": "ABORT"}
+    try:
+        Listener = Listen(Config, Log, Selector)
+        Deadline = time.monotonic() + Config["StageTimeout"]
+        while len(Done) != 2:
+            if time.monotonic() >= Deadline:
+                raise TimeoutError("control preflight deadline expired")
+            Ready = {Key.fileobj for Key, _ in Selector.select(0.05)}
+            for Item in Accepted:
+                if b"\n" in Item.Buffer:
+                    Ready.add(Item.Socket)
+            for Sock in Ready:
+                if Sock is Listener:
+                    NewSock, Address = Listener.accept()
+                    if Address[0] not in Config["PeerIps"].values() or len(Accepted) >= 2:
+                        NewSock.close()
+                        raise ValueError("unexpected control peer IP or excess connection")
+                    Item = Channel(NewSock, Config, Log)
+                    Item.PeerIp, Item.Role = Address[0], None
+                    Accepted.append(Item)
+                    Selector.register(NewSock, selectors.EVENT_READ, Item)
+                    Log.Write("ACCEPT", Source=Address[:2], Target=NewSock.getsockname()[:2],
+                              Pid=os.getpid())
+                    continue
+                Item = Selector.get_key(Sock).data
+                Row = Item.Read()
+                if Row is None:
+                    continue
+                if Row["Type"] in ("ABORT", "FAILED"):
+                    raise RuntimeError(Row.get("Detail", "endpoint failed"))
+                if Item.Role is None:
+                    RegisterStage(Item, Row, Config, Peers)
+                    if len(Peers) == 2:
+                        State = "AWAITING_DONE"
+                        Deadline = time.monotonic() + Config["RunTimeout"]
+                        for Peer in Peers.values():
+                            Peer.Send("RUN_DONE", Success=True,
+                                      Classification=CONTROL_PREFLIGHT_CLASSIFICATION)
+                    continue
+                Role = Item.Role
+                if (State != "AWAITING_DONE" or Row["Type"] != Role + "_DONE" or
+                        Role in Done or Row.get("Success") is not True or
+                        Row.get("Classification") != CONTROL_PREFLIGHT_CLASSIFICATION):
+                    raise ValueError("invalid control preflight acknowledgement")
+                Done.add(Role)
+                if len(Done) == 2:
+                    for Peer in Peers.values():
+                        Peer.Send("RUN_DONE", Success=True,
+                                  Classification=CONTROL_PREFLIGHT_CLASSIFICATION)
+                    break
+        Result = {"Success": True,
+                  "Classification": CONTROL_PREFLIGHT_CLASSIFICATION,
+                  "Roles": sorted(Done)}
+    except (Exception, KeyboardInterrupt) as Error:
+        Result["Detail"] = str(Error) or type(Error).__name__
+        for Item in Accepted:
+            try:
+                Item.Send("ABORT", Detail=Result["Detail"][:2048])
+            except Exception:
+                pass
+    finally:
+        for Item in Accepted:
+            Item.Socket.close()
+        Selector.close()
+        if Listener:
+            Listener.close()
+        Log.Close(Result)
+    return 0 if Result["Success"] else 1
+
+
+def ControlPreflightEndpoint(Config, ValidateConfig, LocalRun):
+    """Prove the production child connection path and exit before physical work."""
+    ValidateConfig(Config)
+    Role = Config["Role"]
+    if Role not in ("CLIENT", "SERVER"):
+        raise ValueError("invalid local role")
+    Log = Journal(Config["EvidenceDir"])
+    Run = LocalRun(Config, Log)
+    Link = None
+    Result = {"Success": False, "Classification": "ABORT"}
+    Cleaned = False
+    try:
+        Run.Check()
+        Link = ConnectEndpoint(Config, Log)
+        Deadline = time.monotonic() + Config["StageTimeout"] + Config["RunTimeout"]
+        while True:
+            if time.monotonic() >= Deadline:
+                raise TimeoutError("control preflight response deadline expired")
+            Row = Link.Read()
+            if Row is None:
+                continue
+            if Row["Type"] == "ABORT":
+                raise RuntimeError(Row.get("Detail", "coordinator aborted"))
+            if (Row["Type"] != "RUN_DONE" or Row.get("Success") is not True or
+                    Row.get("Classification") != CONTROL_PREFLIGHT_CLASSIFICATION):
+                raise ValueError("unexpected control preflight response")
+            Errors = Run.Cleanup()
+            Cleaned = True
+            if Errors:
+                raise RuntimeError("control preflight cleanup failed: " + str(Errors))
+            Link.Send(Role + "_DONE", Success=True,
+                      Classification=CONTROL_PREFLIGHT_CLASSIFICATION)
+            while True:
+                if time.monotonic() >= Deadline:
+                    raise TimeoutError("control preflight completion deadline expired")
+                Final = Link.Read()
+                if Final is None:
+                    continue
+                if (Final["Type"] != "RUN_DONE" or Final.get("Success") is not True or
+                        Final.get("Classification") != CONTROL_PREFLIGHT_CLASSIFICATION):
+                    raise ValueError("unexpected control preflight completion")
+                break
+            Result = {"Success": True,
+                      "Classification": CONTROL_PREFLIGHT_CLASSIFICATION,
+                      "Role": Role}
+            break
+    except (Exception, KeyboardInterrupt) as Error:
+        Result = {"Success": False, "Classification": "ABORT",
+                  "Detail": str(Error) or type(Error).__name__}
+        if Link:
+            try:
+                Link.Send("FAILED", Detail=Result["Detail"][:2048])
+            except Exception:
+                pass
+    finally:
+        if not Cleaned:
+            Errors = Run.Cleanup()
+            if Errors:
+                Result["Success"] = False
+                Result["CleanupErrors"] = Errors
+        if Link:
+            Link.Socket.close()
         Log.Close(Result)
     return 0 if Result["Success"] else 1
 

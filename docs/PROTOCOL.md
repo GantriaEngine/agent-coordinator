@@ -21,6 +21,17 @@ top-level result under the configured classification. Without the key, the
 historical `ONE_CLIENT_READINESS_ONLY` label and success behavior are preserved.
 This is result reconciliation, not a wire capability or acceptance gate.
 
+The locally selected legacy control preflight is a separate diagnostic state
+machine. It shares the production listener setup, explicit endpoint source
+bind, bounded connect, authenticated channel and `STAGE_READY` registration.
+After both roles register, the coordinator sends `RUN_DONE` with
+`CONTROL_PREFLIGHT_ONLY`; each endpoint answers its role's `*_DONE`, and the
+coordinator sends a final `RUN_DONE` after both acknowledgements. No physical
+capture/probe transition is legal in this mode. An invalid role, peer source,
+token, sequence, classification or acknowledgement fails closed. Its result
+cannot be used as readiness or service evidence. Existing legacy readiness
+messages and behavior are unchanged.
+
 ## Schema-control v1
 
 The machine-readable [envelope schema](../agent_coordinator/schemas/envelope.json)
