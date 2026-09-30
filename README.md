@@ -40,6 +40,9 @@ hook deadline; they do not install a service or change NIC policy.
   configured `ResultClassification` labels the top-level result only when both
   endpoint reports agree with it; disagreement makes the run unsuccessful. The
   classification remains compatibility metadata, not an acceptance decision.
+  A separate locally selected control-only preflight shares the production
+  source-bind/connect/`STAGE_READY` path and returns
+  `CONTROL_PREFLIGHT_ONLY` without invoking capture or probe methods.
 - `agent_coordinator.workflow`: strict schema, role transitions, numeric parameter
   bounds, versioned symbolic capabilities, locally installed callable catalog.
 - `agent_coordinator.control`: authenticated assignment pull, registration,
