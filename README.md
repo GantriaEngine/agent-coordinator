@@ -29,6 +29,9 @@ non-Gargantuan [workflow](examples/readiness.json). It starts no capture/probe.
 The helper tests use a harmless locally installed mock hook and exercise the real
 90-second capture duration limit and a 16-second export within the fixed 30-second
 hook deadline; they do not install a service or change NIC policy.
+The separate [Farm32 source candidate](docs/FARM32_CAPTURE_CANDIDATE.md) has a
+compile-time 600-second lease and is not part of the installed v1 baseline or
+the published v0.1.0 qualification.
 
 ## Architecture and usage
 

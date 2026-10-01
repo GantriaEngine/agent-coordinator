@@ -41,8 +41,12 @@ internal static class HelperTests
             var RunId = Guid.NewGuid().ToString("D");
             async Task<CaptureResponse> Request(string Operation, string? DirectoryName = null, int? Pid = null) =>
                 await (Task<CaptureResponse>)Invoke(Service, "ExecuteAsync",
-                    new CaptureRequest(1, Operation, DirectoryName ?? Evidence, RunId, Pid ?? Environment.ProcessId), CancellationToken.None)!;
+                    new CaptureRequest(CaptureProfile.ProtocolVersion, Operation, DirectoryName ?? Evidence, RunId, Pid ?? Environment.ProcessId), CancellationToken.None)!;
             Assert((await Request("status")).Success, "authorized status failed");
+            var WrongVersion = CaptureProfile.ProtocolVersion == 1 ? 2 : 1;
+            var DeniedVersion = await (Task<CaptureResponse>)Invoke(Service, "ExecuteAsync",
+                new CaptureRequest(WrongVersion, "start", Evidence, RunId, Environment.ProcessId), CancellationToken.None)!;
+            Assert(!DeniedVersion.Success, "wrong capture profile request version accepted");
             Assert(!(await Request("shell")).Success, "unsupported operation accepted");
             Assert(!(await Request("start", Root)).Success, "out-of-root path accepted");
             Assert(!(await Request("start", Path.Combine(EvidenceRoot, "..", "outside"))).Success, "traversal accepted");
@@ -76,16 +80,48 @@ internal static class HelperTests
             await Task.Delay(3000);
             Assert((await Request("status")).State == "idle", "helper exit did not stop capture");
             Assert((await Request("start")).Success, "duration test start failed");
+#if FARM32_CAPTURE
+            // Test the deadline transition without occupying the test host for ten minutes.
+            // The literal 600-second profile is asserted below; no capture tool is launched.
+            var ActiveField = typeof(CaptureService).GetField("Active", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var Current = (ActiveCapture)ActiveField.GetValue(Service)!;
+            ActiveField.SetValue(Service, Current with { DeadlineUtc = DateTime.UtcNow.AddSeconds(-1) });
+            await Task.Delay(1200);
+            Assert((await Request("status")).State == "idle", "farm deadline did not stop capture");
+#else
             // Exercise the real fixed 90-second bound with a harmless mock hook.
             await Task.Delay(91500);
             Assert((await Request("status")).State == "idle", "capture duration exceeded 90 second bound");
+#endif
             Assert((await Request("start")).Success, "service cleanup start failed");
-            Invoke(Service, "OnStop");
+            var Lock = (SemaphoreSlim)typeof(CaptureService).GetField("StateLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(Service)!;
+            await Lock.WaitAsync();
+            var StopTask = Task.Run(() => Invoke(Service, "OnStop"));
+            await Task.Delay(250);
+            Lock.Release();
+            await StopTask;
             Assert((await Request("status")).State == "idle", "service stop cleanup failed");
             var Limit = (TimeSpan)typeof(CaptureService).GetField("CaptureLimit", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-            Assert(Limit == TimeSpan.FromSeconds(90), "hard duration bound changed");
-            var HookLimit = (TimeSpan)typeof(CaptureService).GetField("HookLimit", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-            Assert(HookLimit == TimeSpan.FromSeconds(30), "bounded hook deadline changed");
+            Assert(Limit == TimeSpan.FromSeconds(
+#if FARM32_CAPTURE
+                600
+#else
+                90
+#endif
+            ), "hard duration bound changed");
+#if FARM32_CAPTURE
+            Assert(CaptureProfile.PipeName == "GantriaAgentCoordinatorCaptureFarm32-v2" &&
+                CaptureProfile.ServiceName == "GantriaAgentCoordinatorCaptureFarm32" &&
+                CaptureProfile.DataDirectory == "AgentCoordinatorCaptureFarm32" &&
+                CaptureProfile.HookLimit == TimeSpan.FromSeconds(60) &&
+                CaptureProfile.ResponseTimeoutMilliseconds == 135000, "farm profile isolation changed");
+#else
+            Assert(CaptureProfile.PipeName == "GantriaAgentCoordinatorCapture-v1" &&
+                CaptureProfile.ServiceName == "GantriaAgentCoordinatorCapture" &&
+                CaptureProfile.DataDirectory == "AgentCoordinatorCapture" &&
+                CaptureProfile.HookLimit == TimeSpan.FromSeconds(30) &&
+                CaptureProfile.ResponseTimeoutMilliseconds == 75000, "baseline profile changed");
+#endif
             // OS-level denial: current user is deliberately excluded from this test pipe.
             var Security = new PipeSecurity();
             Security.SetAccessRuleProtection(true, false);

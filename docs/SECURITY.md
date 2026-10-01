@@ -41,7 +41,10 @@ The optional Windows service stays below the agent reasoning layer. LocalSystem
 and the installing user SID are the only pipe principals. Fixed `start`, `stop`,
 `status` operations use the administrator-installed hash-pinned capture hook,
 one evidence root, one active capture, a verified endpoint process image and
-start-time lease, a 90-second hard limit, protected persistent ownership and audit.
+start-time lease, the installed v1 90-second hard limit, protected persistent
+ownership and audit. The separate uninstalled Farm32 v2 source candidate has a
+fixed 600-second limit on its own service/pipe and requires deployment
+qualification before use; it does not alter the v0.1.0 baseline.
 Hook execution is internal implementation, never a received executable payload.
 Root escape/reparse paths and wrong hook hashes reject. Service stop, helper exit
 and timeout stop the owned capture; ownership ambiguity blocks recovery and new
