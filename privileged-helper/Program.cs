@@ -52,19 +52,26 @@ internal static class Program
 internal sealed class CaptureClient
 {
     public static int Send(string Operation, string EvidenceDirectory, string RunId, int LeasePid)
+        => SendToPipe(CaptureProfile.PipeName, Operation, EvidenceDirectory, RunId, LeasePid);
+
+    // The CLI always uses the fixed profile pipe. The internal pipe argument
+    // lets the transport be exercised against a harmless local test server.
+    internal static int SendToPipe(string PipeName, string Operation, string EvidenceDirectory, string RunId, int LeasePid)
     {
         try
         {
-            using var Pipe = new NamedPipeClientStream(".", CaptureProfile.PipeName, PipeDirection.InOut, PipeOptions.None,
+            using var Pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous,
                 TokenImpersonationLevel.Impersonation);
             Pipe.Connect(5000);
-            Pipe.ReadTimeout = CaptureProfile.ResponseTimeoutMilliseconds;
-            Pipe.WriteTimeout = 5000;
             using var Writer = new StreamWriter(Pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true };
             using var Reader = new StreamReader(Pipe, Encoding.UTF8, false, 1024, true);
             var Request = JsonSerializer.Serialize(new CaptureRequest(CaptureProfile.ProtocolVersion, Operation, EvidenceDirectory, RunId, LeasePid));
-            Writer.WriteLine(Request);
-            var ResponseText = Reader.ReadLine();
+            // NamedPipeClientStream.CanTimeout is false on the deployed worker;
+            // ReadTimeout/WriteTimeout throw instead of bounding an operation.
+            // Dispose the pipe on timeout to abort the pending operation.
+            Writer.WriteLineAsync(Request).WaitAsync(TimeSpan.FromMilliseconds(5000)).GetAwaiter().GetResult();
+            var ResponseText = Reader.ReadLineAsync().WaitAsync(
+                TimeSpan.FromMilliseconds(CaptureProfile.ResponseTimeoutMilliseconds)).GetAwaiter().GetResult();
             if (ResponseText is null || ResponseText.Length > 16384)
                 throw new InvalidDataException("Capture service returned an invalid response.");
             var Response = JsonSerializer.Deserialize<CaptureResponse>(ResponseText)

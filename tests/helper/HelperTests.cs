@@ -158,7 +158,40 @@ internal static class HelperTests
             var Denied = false;
             try { Client.Connect(1000); } catch (UnauthorizedAccessException) { Denied = true; }
             Assert(Denied, "non-authorized SID opened pipe");
-            Console.WriteLine("[Coordinator:HelperTests] Fixed operations, confinement, hook hash, lease cleanup, duration, service cleanup and SID pipe denial passed");
+            var ClientPipeName = "agent-coordinator-client-" + Guid.NewGuid();
+            var ClientSecurity = new PipeSecurity();
+            ClientSecurity.SetAccessRuleProtection(true, false);
+            ClientSecurity.AddAccessRule(new PipeAccessRule(WindowsIdentity.GetCurrent().User!,
+                PipeAccessRights.FullControl, AccessControlType.Allow));
+            using var ClientServer = NamedPipeServerStreamAcl.Create(ClientPipeName, PipeDirection.InOut, 1,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 1024, 1024, ClientSecurity);
+            var ClientRunId = Guid.NewGuid().ToString("D");
+            var ServeClient = Task.Run(async () =>
+            {
+                await ClientServer.WaitForConnectionAsync();
+                using var Reader = new StreamReader(ClientServer, System.Text.Encoding.UTF8, false, 1024, true);
+                using var Writer = new StreamWriter(ClientServer, new System.Text.UTF8Encoding(false), 1024, true) { AutoFlush = true };
+                var RequestText = await Reader.ReadLineAsync();
+                var Received = JsonSerializer.Deserialize<CaptureRequest>(RequestText!);
+                Assert(Received?.Version == CaptureProfile.ProtocolVersion && Received.Operation == "status" &&
+                    Received.RunId == ClientRunId, "pipe client sent the wrong fixed request");
+                await Writer.WriteLineAsync(JsonSerializer.Serialize(
+                    new CaptureResponse(true, "status", ClientRunId, "idle", "mock")));
+            });
+            var OriginalOutput = Console.Out;
+            using var ClientOutput = new StringWriter();
+            int ClientExit;
+            try
+            {
+                Console.SetOut(ClientOutput);
+                ClientExit = CaptureClient.SendToPipe(ClientPipeName, "status", Evidence, ClientRunId, Environment.ProcessId);
+            }
+            finally { Console.SetOut(OriginalOutput); }
+            await ServeClient;
+            var ClientReply = JsonSerializer.Deserialize<CaptureResponse>(ClientOutput.ToString());
+            Assert(ClientExit == 0 && ClientReply?.Success == true && ClientReply.State == "idle",
+                "bounded named-pipe client could not read the mock response");
+            Console.WriteLine("[Coordinator:HelperTests] Fixed operations, confinement, hook hash, lease cleanup, duration, service cleanup, SID pipe denial and bounded pipe client passed");
             return 0;
         }
         finally
