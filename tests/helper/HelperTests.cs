@@ -28,9 +28,35 @@ internal static class HelperTests
             var Evidence = Path.Combine(EvidenceRoot, "run");
             Directory.CreateDirectory(Evidence);
             var Hook = Path.Combine(Root, "capture-mock.ps1");
-            const string HookText = "param([string]$EvidenceDir,[string]$Action)\n" +
+            const string HookBody = "param([string]$EvidenceDir,[string]$Action)\n" +
                 "if ($Action -eq 'Stop' -and (Test-Path -LiteralPath (Join-Path $EvidenceDir 'slow-stop.txt'))) { Start-Sleep -Seconds 16 }\n" +
                 "Set-Content -LiteralPath (Join-Path $EvidenceDir 'operation.txt') -Value $Action\n";
+            var HookText = HookBody;
+#if FARM32_CAPTURE
+            // A CRLF hook larger than the EncodedCommand command-line limit
+            // must still execute through the fixed, pinned Farm32 file path.
+            HookText = HookBody.Replace("\n", "\r\n") +
+                String.Concat(Enumerable.Repeat("#" + new string('x', 180) + "\r\n", 100));
+            var LongEvidenceDirectory = @"C:\" + new string('x', 509);
+            var Launch = CaptureService.CreateFarm32HookStartInfo("powershell.exe", Hook,
+                LongEvidenceDirectory, "Start", Root);
+            Assert(LongEvidenceDirectory.Length == 512 &&
+                Launch.ArgumentList.SequenceEqual(new[] { "-NoProfile", "-NonInteractive", "-File",
+                    Hook, "-EvidenceDir", LongEvidenceDirectory, "-Action", "Start" }) &&
+                Launch.UseShellExecute == false && Launch.CreateNoWindow &&
+                Launch.RedirectStandardOutput && Launch.RedirectStandardError &&
+                Launch.WorkingDirectory == Root, "Farm32 fixed long-path hook launch changed");
+            var OldEncoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(
+                "& {\n" + HookText + "\n} '" + LongEvidenceDirectory + "' Start"));
+            Assert(OldEncoded.Length > 32767 &&
+                String.Join(' ', Launch.ArgumentList).Length < 2048,
+                "Farm32 hook command still depends on encoded source length");
+            var DeniedAction = false;
+            try { CaptureService.CreateFarm32HookStartInfo("powershell.exe", Hook,
+                LongEvidenceDirectory, "Finalize", Root); }
+            catch (InvalidDataException) { DeniedAction = true; }
+            Assert(DeniedAction, "Farm32 hook launch accepted an arbitrary operation");
+#endif
             File.WriteAllText(Hook, HookText);
             var Hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Hook)));
             var Sid = WindowsIdentity.GetCurrent().User!.Value;

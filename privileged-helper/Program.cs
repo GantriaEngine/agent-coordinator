@@ -417,17 +417,24 @@ internal sealed class CaptureService : ServiceBase
         if (!StringComparer.OrdinalIgnoreCase.Equals(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Config.HookPath))),
                 Config.HookSha256))
             throw new InvalidDataException("installed capture hook hash does not match service configuration");
+        var PowerShell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+#if FARM32_CAPTURE
+        // The bounded Farm32 hook is larger than Windows' command-line limit
+        // when embedded as UTF-16 Base64. Its installed path is read-only to
+        // the pipe caller and hash-pinned immediately before this fixed launch.
+        var Start = CreateFarm32HookStartInfo(PowerShell, Config.HookPath, EvidenceDirectory, Action, BaseDirectory);
+#else
         var Script = File.ReadAllText(Config.HookPath, Encoding.UTF8);
         var Code = "& {\n" + Script + "\n} '" + EvidenceDirectory.Replace("'", "''") + "' " + Action;
         var Encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(Code));
-        var PowerShell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var Start = new ProcessStartInfo(PowerShell) { UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = BaseDirectory };
         Start.ArgumentList.Add("-NoProfile");
         Start.ArgumentList.Add("-NonInteractive");
         Start.ArgumentList.Add("-EncodedCommand");
         Start.ArgumentList.Add(Encoded);
+#endif
         using var Child = System.Diagnostics.Process.Start(Start) ?? throw new InvalidOperationException("PowerShell did not start");
         var OutputTask = Child.StandardOutput.ReadToEndAsync();
         var ErrorTask = Child.StandardError.ReadToEndAsync();
@@ -450,6 +457,25 @@ internal sealed class CaptureService : ServiceBase
         }
         WriteHookLog(LogPath, "completed" + Environment.NewLine + OutputText + ErrorText);
     }
+
+#if FARM32_CAPTURE
+    internal static ProcessStartInfo CreateFarm32HookStartInfo(string PowerShell, string HookPath,
+        string EvidenceDirectory, string Action, string WorkingDirectory)
+    {
+        if (Action is not ("Start" or "Stop")) throw new InvalidDataException("invalid fixed hook operation");
+        var Start = new ProcessStartInfo(PowerShell) { UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = WorkingDirectory };
+        Start.ArgumentList.Add("-NoProfile");
+        Start.ArgumentList.Add("-NonInteractive");
+        Start.ArgumentList.Add("-File");
+        Start.ArgumentList.Add(HookPath);
+        Start.ArgumentList.Add("-EvidenceDir");
+        Start.ArgumentList.Add(EvidenceDirectory);
+        Start.ArgumentList.Add("-Action");
+        Start.ArgumentList.Add(Action);
+        return Start;
+    }
+#endif
 
     private static void WriteHookLog(string PathName, string Text)
     {

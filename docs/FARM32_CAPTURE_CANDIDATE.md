@@ -11,6 +11,10 @@ request version 2. Its capture lease is a compile-time 600 seconds and its
 Start/Stop hook deadline is 60 seconds. Neither is selected by an IPC field.
 The pinned v1 build remains 90 seconds with its 30-second Stop/export hook
 deadline on its original pipe.
+The Farm32 service verifies the installed hook SHA-256, then launches that
+read-only installed file with fixed `-EvidenceDir` and `-Action Start|Stop`
+arguments. Embedding this larger hook as an encoded command would exceed the
+Windows command-line limit. The v1 hook invocation remains unchanged.
 The fixed operations, SID ACL, hash-pinned hook, process-image/start-time lease,
 single active run, path/reparse confinement, persistent ownership, audit and
 fail-closed recovery are shared code.
@@ -40,9 +44,11 @@ The project Farm32 hook uses a single noncircular 1024-MiB ETL with a
 960-MiB completeness rejection threshold. Start requires 2560 MiB free on
 the evidence volume for ETL, pcapng and 512 MiB headroom; offline Finalize
 requires 1536 MiB still free. Files and markers are Farm32-specific and
-preexisting artifacts reject without replacement. Worker C: currently lacks
-this reserve, so deployment needs an approved dedicated volume and evidence
-root. No alternate root is selected by this source change.
+preexisting artifacts reject without replacement. A read-only check on
+2026-10-01 found 123,799,633,920 bytes free on worker C:, but available space
+is dynamic. The selected dedicated evidence root and its free-space reserve
+must be verified again immediately before staging and every run. No alternate
+root is selected by this source change.
 
 Review/stage sequence:
 
