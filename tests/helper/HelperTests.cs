@@ -41,7 +41,7 @@ internal static class HelperTests
             var Launch = CaptureService.CreateFarm32HookStartInfo("powershell.exe", Hook,
                 LongEvidenceDirectory, "Start", Root);
             Assert(LongEvidenceDirectory.Length == 512 &&
-                Launch.ArgumentList.SequenceEqual(new[] { "-NoProfile", "-NonInteractive", "-File",
+                Launch.ArgumentList.SequenceEqual(new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
                     Hook, "-EvidenceDir", LongEvidenceDirectory, "-Action", "Start" }) &&
                 Launch.UseShellExecute == false && Launch.CreateNoWindow &&
                 Launch.RedirectStandardOutput && Launch.RedirectStandardError &&

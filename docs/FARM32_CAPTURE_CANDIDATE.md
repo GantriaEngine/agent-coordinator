@@ -15,6 +15,9 @@ The Farm32 service verifies the installed hook SHA-256, then launches that
 read-only installed file with fixed `-EvidenceDir` and `-Action Start|Stop`
 arguments. Embedding this larger hook as an encoded command would exceed the
 Windows command-line limit. The v1 hook invocation remains unchanged.
+The Farm32 child sets PowerShell execution policy to `Bypass` for that process
+only because Windows' default Restricted policy blocks `-File`; it does not
+change user or machine policy. The installed path and hash pin remain mandatory.
 The fixed operations, SID ACL, hash-pinned hook, process-image/start-time lease,
 single active run, path/reparse confinement, persistent ownership, audit and
 fail-closed recovery are shared code.

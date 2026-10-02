@@ -467,6 +467,11 @@ internal sealed class CaptureService : ServiceBase
             RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = WorkingDirectory };
         Start.ArgumentList.Add("-NoProfile");
         Start.ArgumentList.Add("-NonInteractive");
+        // Windows' default Restricted policy blocks -File even for the
+        // administrator-installed, hash-pinned hook. Scope this exception to
+        // the child process; never change machine or user execution policy.
+        Start.ArgumentList.Add("-ExecutionPolicy");
+        Start.ArgumentList.Add("Bypass");
         Start.ArgumentList.Add("-File");
         Start.ArgumentList.Add(HookPath);
         Start.ArgumentList.Add("-EvidenceDir");
