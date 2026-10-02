@@ -17,7 +17,9 @@ not change UAC, execution policy, firewall, NIC or unrelated service state.
 Client usage: `AgentCoordinator.CaptureService.exe start|stop|status <evidence-dir>
 <run-uuid> <endpoint-pid>`. Only that user SID and LocalSystem can open the pipe.
 Canonical UUID, version 1, path confinement, verified lease process image/start
-time, one active run, 90-second duration, fixed hook operations and audit remain.
+time, one active run, the v1 90-second duration, fixed hook operations and audit
+remain. The [separate Farm32 source candidate](../docs/FARM32_CAPTURE_CANDIDATE.md)
+is not an installed replacement for this service.
 Recovery only stops the persisted owned run; ambiguous ownership blocks starts.
 Capture cleanup is stop; no broader cleanup or elevated execution API is exposed.
 

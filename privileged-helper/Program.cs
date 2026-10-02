@@ -9,6 +9,29 @@ using System.Text.RegularExpressions;
 
 namespace AgentCoordinator.CaptureService;
 
+// Selected at build time. The farm service has a distinct pipe, service identity,
+// data directory and request version; no IPC field can select a longer lease.
+internal static class CaptureProfile
+{
+#if FARM32_CAPTURE
+    internal const string PipeName = "GantriaAgentCoordinatorCaptureFarm32-v2";
+    internal const string ServiceName = "GantriaAgentCoordinatorCaptureFarm32";
+    internal const string DataDirectory = "AgentCoordinatorCaptureFarm32";
+    internal const int ProtocolVersion = 2;
+    internal static readonly TimeSpan CaptureLimit = TimeSpan.FromSeconds(600);
+    internal static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(60);
+    internal const int ResponseTimeoutMilliseconds = 135000;
+#else
+    internal const string PipeName = "GantriaAgentCoordinatorCapture-v1";
+    internal const string ServiceName = "GantriaAgentCoordinatorCapture";
+    internal const string DataDirectory = "AgentCoordinatorCapture";
+    internal const int ProtocolVersion = 1;
+    internal static readonly TimeSpan CaptureLimit = TimeSpan.FromSeconds(90);
+    internal static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(30);
+    internal const int ResponseTimeoutMilliseconds = 75000;
+#endif
+}
+
 internal static class Program
 {
     public static int Main(string[] Args)
@@ -28,20 +51,27 @@ internal static class Program
 
 internal sealed class CaptureClient
 {
-    private const string PipeName = "GantriaAgentCoordinatorCapture-v1";
-
     public static int Send(string Operation, string EvidenceDirectory, string RunId, int LeasePid)
+        => SendToPipe(CaptureProfile.PipeName, Operation, EvidenceDirectory, RunId, LeasePid);
+
+    // The CLI always uses the fixed profile pipe. The internal pipe argument
+    // lets the transport be exercised against a harmless local test server.
+    internal static int SendToPipe(string PipeName, string Operation, string EvidenceDirectory, string RunId, int LeasePid)
     {
         try
         {
-            using var Pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.None,
+            using var Pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous,
                 TokenImpersonationLevel.Impersonation);
             Pipe.Connect(5000);
             using var Writer = new StreamWriter(Pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true };
             using var Reader = new StreamReader(Pipe, Encoding.UTF8, false, 1024, true);
-            var Request = JsonSerializer.Serialize(new CaptureRequest(1, Operation, EvidenceDirectory, RunId, LeasePid));
-            Writer.WriteLine(Request);
-            var ResponseText = Reader.ReadLine();
+            var Request = JsonSerializer.Serialize(new CaptureRequest(CaptureProfile.ProtocolVersion, Operation, EvidenceDirectory, RunId, LeasePid));
+            // NamedPipeClientStream.CanTimeout is false on the deployed worker;
+            // ReadTimeout/WriteTimeout throw instead of bounding an operation.
+            // Dispose the pipe on timeout to abort the pending operation.
+            Writer.WriteLineAsync(Request).WaitAsync(TimeSpan.FromMilliseconds(5000)).GetAwaiter().GetResult();
+            var ResponseText = Reader.ReadLineAsync().WaitAsync(
+                TimeSpan.FromMilliseconds(CaptureProfile.ResponseTimeoutMilliseconds)).GetAwaiter().GetResult();
             if (ResponseText is null || ResponseText.Length > 16384)
                 throw new InvalidDataException("Capture service returned an invalid response.");
             var Response = JsonSerializer.Deserialize<CaptureResponse>(ResponseText)
@@ -65,10 +95,9 @@ internal sealed record ActiveCapture(string RunId, string EvidenceDirectory, Dat
 
 internal sealed class CaptureService : ServiceBase
 {
-    private const string PipeName = "GantriaAgentCoordinatorCapture-v1";
     private const int MaximumRequestBytes = 16384;
-    private static readonly TimeSpan CaptureLimit = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan HookLimit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CaptureLimit = CaptureProfile.CaptureLimit;
+    private static readonly TimeSpan HookLimit = CaptureProfile.HookLimit;
     private readonly string BaseDirectory;
     private readonly CancellationTokenSource StopSource = new();
     private readonly SemaphoreSlim StateLock = new(1, 1);
@@ -82,8 +111,8 @@ internal sealed class CaptureService : ServiceBase
     internal CaptureService(string? LocalTestDirectory)
     {
         BaseDirectory = LocalTestDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "GantriaEngine", "AgentCoordinatorCapture");
-        ServiceName = "GantriaAgentCoordinatorCapture";
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "GantriaEngine", CaptureProfile.DataDirectory);
+        ServiceName = CaptureProfile.ServiceName;
         CanStop = true;
         AutoLog = true;
     }
@@ -97,8 +126,20 @@ internal sealed class CaptureService : ServiceBase
     protected override void OnStop()
     {
         StopSource.Cancel();
-        try { StateLock.Wait(TimeSpan.FromSeconds(2)); }
-        catch { return; }
+        // A concurrent fixed hook may hold StateLock for its full bound. Ask
+        // SCM for enough stop-pending time to wait for it and then stop once.
+        var StopBudget = (int)(2 * HookLimit.TotalMilliseconds + 10000);
+        try { RequestAdditionalTime(StopBudget); }
+        catch (InvalidOperationException) { } // Direct local test seam.
+        catch (System.ComponentModel.Win32Exception) { } // Not SCM-hosted.
+        bool Locked;
+        try { Locked = StateLock.Wait(HookLimit + TimeSpan.FromSeconds(5)); }
+        catch { Audit("SERVICE_STOP_CLEANUP", Active?.RunId ?? "", "state lock wait failed"); return; }
+        if (!Locked)
+        {
+            Audit("SERVICE_STOP_CLEANUP", Active?.RunId ?? "", "state lock remained busy");
+            return;
+        }
         try
         {
             if (Active is not null)
@@ -131,7 +172,7 @@ internal sealed class CaptureService : ServiceBase
                     PipeAccessRights.FullControl, AccessControlType.Allow));
                 Security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(Config.AuthorizedSid),
                     PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
-                using var Pipe = NamedPipeServerStreamAcl.Create(PipeName, PipeDirection.InOut, 1,
+                using var Pipe = NamedPipeServerStreamAcl.Create(CaptureProfile.PipeName, PipeDirection.InOut, 1,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.WriteThrough,
                     MaximumRequestBytes, MaximumRequestBytes, Security);
                 await Pipe.WaitForConnectionAsync(Token).ConfigureAwait(false);
@@ -161,7 +202,7 @@ internal sealed class CaptureService : ServiceBase
         CaptureRequest? Request;
         try { Request = JsonSerializer.Deserialize<CaptureRequest>(Line); }
         catch (JsonException) { Request = null; }
-        if (Request is null || Request.Version != 1 || !Guid.TryParse(Request.RunId, out var RunGuid) ||
+        if (Request is null || Request.Version != CaptureProfile.ProtocolVersion || !Guid.TryParse(Request.RunId, out var RunGuid) ||
             RunGuid.ToString("D") != Request.RunId || Request.Operation is not ("start" or "stop" or "status"))
         {
             await Writer.WriteLineAsync(JsonSerializer.Serialize(new CaptureResponse(false, "", "", "denied", "invalid request shape"))).ConfigureAwait(false);
@@ -194,7 +235,7 @@ internal sealed class CaptureService : ServiceBase
 
     private async Task<CaptureResponse> ExecuteAsync(CaptureRequest Request, CancellationToken Token)
     {
-        if (Request.Version != 1 || !Guid.TryParse(Request.RunId, out var RunGuid) ||
+        if (Request.Version != CaptureProfile.ProtocolVersion || !Guid.TryParse(Request.RunId, out var RunGuid) ||
             RunGuid.ToString("D") != Request.RunId || Request.Operation is not ("start" or "stop" or "status"))
             return new(false, Request.Operation, Request.RunId, "denied", "invalid request shape");
         await StateLock.WaitAsync(Token).ConfigureAwait(false);
@@ -237,7 +278,12 @@ internal sealed class CaptureService : ServiceBase
             DeleteActiveState();
             Active = null;
             Audit("CAPTURE_STOP", Request.RunId, "completed");
-            return new(true, Request.Operation, Request.RunId, "stopped", "owned capture stopped and exported");
+            return new(true, Request.Operation, Request.RunId, "stopped",
+#if FARM32_CAPTURE
+                "owned capture stopped; bounded offline export remains required");
+#else
+                "owned capture stopped and exported");
+#endif
         }
         catch (Exception Error)
         {
@@ -251,15 +297,14 @@ internal sealed class CaptureService : ServiceBase
     {
         try
         {
-            var Started = DateTime.UtcNow;
-            while (DateTime.UtcNow - Started < CaptureLimit)
+            while (true)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500), Token).ConfigureAwait(false);
                 ActiveCapture? Current;
                 await StateLock.WaitAsync(Token).ConfigureAwait(false);
                 try { Current = Active?.RunId == RunId ? Active : null; }
                 finally { StateLock.Release(); }
                 if (Current is null) return;
+                if (DateTime.UtcNow >= Current.DeadlineUtc) break;
                 if (!IsLeaseProcessAlive(Current))
                 {
                     await StateLock.WaitAsync(Token).ConfigureAwait(false);
@@ -276,6 +321,7 @@ internal sealed class CaptureService : ServiceBase
                     finally { StateLock.Release(); }
                     return;
                 }
+                await Task.Delay(TimeSpan.FromMilliseconds(500), Token).ConfigureAwait(false);
             }
             await StateLock.WaitAsync(Token).ConfigureAwait(false);
             try
@@ -285,7 +331,7 @@ internal sealed class CaptureService : ServiceBase
                     InvokeHook("Stop", Active.EvidenceDirectory);
                     DeleteActiveState();
                     Active = null;
-                    Audit("CAPTURE_DEADLINE", RunId, "stopped at hard 90 second deadline");
+                    Audit("CAPTURE_DEADLINE", RunId, $"stopped at hard {CaptureLimit.TotalSeconds:0} second deadline");
                 }
             }
             finally { StateLock.Release(); }
@@ -378,17 +424,24 @@ internal sealed class CaptureService : ServiceBase
         if (!StringComparer.OrdinalIgnoreCase.Equals(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Config.HookPath))),
                 Config.HookSha256))
             throw new InvalidDataException("installed capture hook hash does not match service configuration");
+        var PowerShell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+#if FARM32_CAPTURE
+        // The bounded Farm32 hook is larger than Windows' command-line limit
+        // when embedded as UTF-16 Base64. Its installed path is read-only to
+        // the pipe caller and hash-pinned immediately before this fixed launch.
+        var Start = CreateFarm32HookStartInfo(PowerShell, Config.HookPath, EvidenceDirectory, Action, BaseDirectory);
+#else
         var Script = File.ReadAllText(Config.HookPath, Encoding.UTF8);
         var Code = "& {\n" + Script + "\n} '" + EvidenceDirectory.Replace("'", "''") + "' " + Action;
         var Encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(Code));
-        var PowerShell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var Start = new ProcessStartInfo(PowerShell) { UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = BaseDirectory };
         Start.ArgumentList.Add("-NoProfile");
         Start.ArgumentList.Add("-NonInteractive");
         Start.ArgumentList.Add("-EncodedCommand");
         Start.ArgumentList.Add(Encoded);
+#endif
         using var Child = System.Diagnostics.Process.Start(Start) ?? throw new InvalidOperationException("PowerShell did not start");
         var OutputTask = Child.StandardOutput.ReadToEndAsync();
         var ErrorTask = Child.StandardError.ReadToEndAsync();
@@ -411,6 +464,30 @@ internal sealed class CaptureService : ServiceBase
         }
         WriteHookLog(LogPath, "completed" + Environment.NewLine + OutputText + ErrorText);
     }
+
+#if FARM32_CAPTURE
+    internal static ProcessStartInfo CreateFarm32HookStartInfo(string PowerShell, string HookPath,
+        string EvidenceDirectory, string Action, string WorkingDirectory)
+    {
+        if (Action is not ("Start" or "Stop")) throw new InvalidDataException("invalid fixed hook operation");
+        var Start = new ProcessStartInfo(PowerShell) { UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = WorkingDirectory };
+        Start.ArgumentList.Add("-NoProfile");
+        Start.ArgumentList.Add("-NonInteractive");
+        // Windows' default Restricted policy blocks -File even for the
+        // administrator-installed, hash-pinned hook. Scope this exception to
+        // the child process; never change machine or user execution policy.
+        Start.ArgumentList.Add("-ExecutionPolicy");
+        Start.ArgumentList.Add("Bypass");
+        Start.ArgumentList.Add("-File");
+        Start.ArgumentList.Add(HookPath);
+        Start.ArgumentList.Add("-EvidenceDir");
+        Start.ArgumentList.Add(EvidenceDirectory);
+        Start.ArgumentList.Add("-Action");
+        Start.ArgumentList.Add(Action);
+        return Start;
+    }
+#endif
 
     private static void WriteHookLog(string PathName, string Text)
     {
