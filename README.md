@@ -50,6 +50,11 @@ the published v0.1.0 qualification.
   bounds, versioned symbolic capabilities, locally installed callable catalog.
 - `agent_coordinator.control`: authenticated assignment pull, registration,
   explicit barrier, ordered execution, result and acknowledged cleanup.
+- `agent_coordinator.owned_process`: checked Windows Job lifetime for fixed
+  installed adapters. Children enter the Job before execution; cleanup verifies
+  termination and zero active members within one shared ten-second deadline.
+  A failed child remains failed even when its owned tree is successfully reaped.
+  This local implementation primitive adds no wire launch capability.
 - `privileged-helper`: SID-restricted capture service. The hook is selected and
   hash-pinned locally by the administrator, not by a workflow or coordinator.
 
