@@ -41,7 +41,10 @@ The optional Windows service stays below the agent reasoning layer. LocalSystem
 and the installing user SID are the only pipe principals. Fixed `start`, `stop`,
 `status` operations use the administrator-installed hash-pinned capture hook,
 one evidence root, one active capture, a verified endpoint process image and
-start-time lease, a 90-second hard limit, protected persistent ownership and audit.
+start-time lease, the installed v1 90-second hard limit, protected persistent
+ownership and audit. The separate uninstalled Farm32 v2 source candidate has a
+fixed 600-second limit on its own service/pipe and requires deployment
+qualification before use; it does not alter the v0.1.0 baseline.
 Hook execution is internal implementation, never a received executable payload.
 Root escape/reparse paths and wrong hook hashes reject. Service stop, helper exit
 and timeout stop the owned capture; ownership ambiguity blocks recovery and new
@@ -53,6 +56,20 @@ Host success requires cleanup acknowledgement from all workers. Adapter callback
 must be cooperative and use bounded underlying APIs; an unresponsive installed
 callback requires its own below-agent lease/OS watchdog. Process/host crash cannot
 run Python finally blocks, which is why privileged capture has an independent lease.
+
+`owned_process.OwnedProcess` is an installed-adapter primitive, never a wire
+capability. On Windows it starts the child inside an unnamed kill-on-close Job
+before its first instruction, retaining ownership of descendants after root
+exit. Close checks Job termination and observes zero active members within ten
+seconds before reporting reaping; a nonzero root exit does not change that
+cleanup fact. Missing Job/query/termination/release proof fails closed. Failed
+handle releases retain their identities and aggregate with other cleanup
+failures; remaining releases are still attempted. Interruptions are re-raised
+after cleanup attempts with the failure details attached. Startup transfers
+ownership only after launch setup cleanup succeeds and reports rollback
+failures without claiming an orphan-free result. The caller owns
+bounded stream drainage and fixed local executable/argv validation. Other
+platforms are deliberately unsupported by this checked primitive.
 
 Report security defects privately to GantriaEngine repository maintainers. See
 [validation](VALIDATION.md) for what is simulated versus physically qualified.
