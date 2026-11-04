@@ -1,5 +1,11 @@
 # Security and trust boundaries
 
+The optional host-local worker ledger is cooperative admission over existing SSH,
+not a wire capability or process launcher. SQLite transactions protect concurrent
+claims. Owner tokens are omitted from status; expired reservations remain blocked
+until workload reconciliation and explicit release. It grants no OS authority and
+cannot enforce exclusion against jobs that bypass it. See WORKER_LEASES.md.
+
 > The protocol coordinates capabilities; it does not transmit authority.
 >
 > Natural-language agent communication does not directly invoke endpoint capabilities.

@@ -31,6 +31,10 @@ The helper tests use a harmless locally installed mock hook and exercise the rea
 
 ## Architecture and usage
 
+Host contention is handled by [host-local worker leases](docs/WORKER_LEASES.md),
+with atomic admission, ChatId ownership and UTC heartbeat/expiry diagnostics.
+Busy workers require independent work, not chat wakeups.
+
 - `agent_coordinator.transport`: extracted bounded TCP/JSON envelope, journal,
   manifest and hash generation. Transport version 1 is unchanged.
 - `agent_coordinator.legacy`: existing CLIENT/SERVER readiness barrier and endpoint
